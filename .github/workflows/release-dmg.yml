@@ -1,0 +1,72 @@
+name: Release DMG
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version string (for example 1.0.0)
+        required: true
+        type: string
+
+jobs:
+  build-sign-notarize:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Archive
+        run: >-
+          xcodebuild
+          -project openauris.xcodeproj
+          -scheme openauris
+          -configuration Release
+          -destination 'platform=macOS'
+          -archivePath build/OpenAuris.xcarchive
+          archive
+
+      - name: Export App
+        run: |
+          cat > build/exportOptions.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>method</key>
+              <string>developer-id</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+            </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath build/OpenAuris.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist build/exportOptions.plist
+
+      - name: Create DMG
+        run: |
+          mkdir -p build/dmg-root
+          cp -R build/export/openauris.app build/dmg-root/
+          hdiutil create -volname "OpenAuris" -srcfolder build/dmg-root -ov -format UDZO build/OpenAuris-${{ inputs.version }}.dmg
+
+      - name: Notarize DMG
+        env:
+          AC_USERNAME: ${{ secrets.APPLE_ID }}
+          AC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          AC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit build/OpenAuris-${{ inputs.version }}.dmg \
+            --apple-id "$AC_USERNAME" \
+            --password "$AC_PASSWORD" \
+            --team-id "$AC_TEAM_ID" \
+            --wait
+          xcrun stapler staple build/OpenAuris-${{ inputs.version }}.dmg
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenAuris-DMG
+          path: build/OpenAuris-${{ inputs.version }}.dmg
