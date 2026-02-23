@@ -22,7 +22,7 @@ jobs:
           -project openauris.xcodeproj
           -scheme openauris
           -configuration Release
-          -destination 'platform=macOS'
+          -destination 'platform=macOS,arch=arm64'
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
           build
