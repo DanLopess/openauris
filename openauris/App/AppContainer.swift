@@ -32,7 +32,6 @@ final class AppContainer: ObservableObject {
     @Published var selectedTab: DashboardTab = .home
     @Published var showOnboarding = false
     @Published var startupErrorMessage: String?
-    @Published var pendingInitialDashboardOpen = false
 
     private var didBootstrap = false
     private var cancellables = Set<AnyCancellable>()
@@ -85,12 +84,6 @@ final class AppContainer: ObservableObject {
             let prefs = try repository.ensurePreferences()
             preferences = prefs
             applyHotkeys(from: prefs)
-
-            if prefs.hasOpenedDashboardOnce != true {
-                prefs.hasOpenedDashboardOnce = true
-                try repository.savePreferences(prefs)
-                pendingInitialDashboardOpen = true
-            }
 
             showOnboarding = !prefs.onboardingCompleted
             permissionManager.refresh()
@@ -242,10 +235,6 @@ final class AppContainer: ObservableObject {
         } catch {
             startupErrorMessage = error.localizedDescription
         }
-    }
-
-    func consumeInitialDashboardOpen() {
-        pendingInitialDashboardOpen = false
     }
 
     private func reloadSessions() {

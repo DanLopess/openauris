@@ -11,7 +11,6 @@ struct OpenAurisApp: App {
                 .environmentObject(container)
         } label: {
             MenuBarLabelView()
-                .environmentObject(container)
         }
         .menuBarExtraStyle(.menu)
 
@@ -21,5 +20,6 @@ struct OpenAurisApp: App {
                 .modelContainer(container.modelContainer)
         }
         .defaultSize(CGSize(width: 1200, height: 760))
+        .defaultLaunchBehavior(.presented)
     }
 }
