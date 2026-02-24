@@ -5,6 +5,7 @@ import Foundation
 final class AudioCaptureService {
     private let engine = AVAudioEngine()
     private var isRunning = false
+    private let captureBufferSize: AVAudioFrameCount = 512
 
     var onFrame: (@Sendable (AudioFrame) -> Void)?
     var onLevel: (@Sendable (Float) -> Void)?
@@ -16,7 +17,7 @@ final class AudioCaptureService {
         let format = input.outputFormat(forBus: 0)
 
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        input.installTap(onBus: 0, bufferSize: captureBufferSize, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             guard let channelData = buffer.floatChannelData?[0] else { return }
             let frameLength = Int(buffer.frameLength)

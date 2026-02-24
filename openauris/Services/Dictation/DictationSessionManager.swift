@@ -1,6 +1,24 @@
 import Foundation
 import Observation
 
+struct BubbleReadinessGate {
+    private var awaitingFirstFrame = false
+
+    mutating func armForStreamingStart() {
+        awaitingFirstFrame = true
+    }
+
+    mutating func consumeFirstAudioFrameIfNeeded() -> Bool {
+        guard awaitingFirstFrame else { return false }
+        awaitingFirstFrame = false
+        return true
+    }
+
+    mutating func disarm() {
+        awaitingFirstFrame = false
+    }
+}
+
 @MainActor
 enum DictationSessionState: Equatable {
     case idle
@@ -29,6 +47,7 @@ final class DictationSessionManager {
 
     private var partialTask: Task<Void, Never>?
     private var beginTask: Task<Void, Never>?
+    private var bubbleReadinessGate = BubbleReadinessGate()
     private var streamingActive = false
     private var holdShortcutIsPressed = false
     private var lastToggleActionAt: Date?
@@ -100,6 +119,7 @@ final class DictationSessionManager {
     func cancelCurrentSession() {
         beginTask?.cancel()
         beginTask = nil
+        bubbleReadinessGate.disarm()
         audioCaptureService.stop()
         partialTask?.cancel()
         partialTask = nil
@@ -200,13 +220,14 @@ final class DictationSessionManager {
             try await transcriptionEngine.startStreaming()
             try Task.checkCancellation()
 
+            bubbleReadinessGate.armForStreamingStart()
             try audioCaptureService.start()
-            bubbleViewModel.state = .listening
             streamingActive = true
             startPartialPolling()
             overlayController.updateAndShow()
         } catch is CancellationError {
             if case .listening(let activeMode) = state, activeMode == mode {
+                bubbleReadinessGate.disarm()
                 audioCaptureService.stop()
                 partialTask?.cancel()
                 partialTask = nil
@@ -231,10 +252,12 @@ final class DictationSessionManager {
         // If streaming never started (for example, hold was released during startup),
         // cancel silently instead of producing a "No speech detected" error.
         guard streamingActive else {
+            bubbleReadinessGate.disarm()
             cancelCurrentSession()
             return
         }
 
+        bubbleReadinessGate.disarm()
         audioCaptureService.stop()
         partialTask?.cancel()
         partialTask = nil
@@ -311,6 +334,9 @@ final class DictationSessionManager {
         audioCaptureService.onLevel = { [weak self] level in
             guard let self else { return }
             Task { @MainActor in
+                if self.bubbleReadinessGate.consumeFirstAudioFrameIfNeeded() {
+                    self.bubbleViewModel.state = .listening
+                }
                 self.bubbleViewModel.level = min(max(level * 6, 0), 1)
                 self.overlayController.updateAndShow()
             }
