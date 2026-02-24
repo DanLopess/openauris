@@ -36,9 +36,11 @@ struct ListeningBubbleView: View {
     // MARK: - Ring appearance
 
     private var ringStyle: AnyShapeStyle {
-        switch viewModel.state {
+        switch viewModel.state.ringStyleToken {
         case .hidden:
             return AnyShapeStyle(Color.clear)
+        case .preparing:
+            return AnyShapeStyle(Color.gray.opacity(0.65))
         case .listening:
             return AnyShapeStyle(
                 AngularGradient(

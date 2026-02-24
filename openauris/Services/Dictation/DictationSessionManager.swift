@@ -33,6 +33,7 @@ final class DictationSessionManager {
     private var holdShortcutIsPressed = false
     private var lastToggleActionAt: Date?
     private var startedAt: Date?
+    private var shouldInsertRealtimePartials = false
     private var currentTargetBundleID: String = "unknown"
     private var isCurrentAppTerminal: Bool = false
 
@@ -160,12 +161,15 @@ final class DictationSessionManager {
             resetInsertionState()
 
             state = .listening(mode)
-            bubbleViewModel.state = .listening
+            bubbleViewModel.state = .preparing
             bubbleViewModel.level = 0
             overlayController.updateAndShow()
 
             let modelID = modelManager.defaultModelID
             let languageOverride = try repository.ensurePreferences().languageOverride
+            shouldInsertRealtimePartials = RealtimeInsertionPolicy.shouldInsertPartials(
+                languageOverride: languageOverride
+            )
             let modelFolderPath = try await modelManager.ensureModelInstalled(modelID)
             try Task.checkCancellation()
             guard mode != .holdToSpeak || holdShortcutIsPressed else {
@@ -197,8 +201,10 @@ final class DictationSessionManager {
             try Task.checkCancellation()
 
             try audioCaptureService.start()
+            bubbleViewModel.state = .listening
             streamingActive = true
             startPartialPolling()
+            overlayController.updateAndShow()
         } catch is CancellationError {
             if case .listening(let activeMode) = state, activeMode == mode {
                 audioCaptureService.stop()
@@ -209,6 +215,7 @@ final class DictationSessionManager {
                 transitionToIdle()
             }
         } catch {
+            shouldInsertRealtimePartials = false
             state = .error(error.localizedDescription)
             bubbleViewModel.state = .error(error.localizedDescription)
             overlayController.updateAndShow()
@@ -326,6 +333,7 @@ final class DictationSessionManager {
                         // terminal apps, and inserts that are too close together.
                         guard !sanitized.isEmpty,
                               !sanitized.hasPrefix("Listening…"),
+                              self.shouldInsertRealtimePartials,
                               !self.isCurrentAppTerminal,
                               sanitized != self.lastInsertedText,
                               !self.isInsertingPartial,
@@ -402,6 +410,7 @@ final class DictationSessionManager {
     private func transitionToIdle() {
         state = .idle
         startedAt = nil
+        shouldInsertRealtimePartials = false
     }
 
     private func dismissBubbleAfterDelay() {
