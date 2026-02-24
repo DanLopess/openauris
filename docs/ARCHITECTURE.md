@@ -5,7 +5,7 @@
 - `AppLayer`: menu bar shell, dashboard windows, onboarding.
 - `SessionLayer`: dictation state orchestration.
 - `AudioLayer`: `AVAudioEngine` microphone capture and level metering.
-- `EngineLayer`: `TranscriptionEngine` protocol + `WhisperKitTranscriptionEngine` implementation (with fallback when WhisperKit is not linked).
+- `EngineLayer`: `TranscriptionEngine` protocol + `WhisperKitTranscriptionEngine` implementation.
 - `InsertionLayer`: accessibility insertion first, clipboard paste fallback.
 - `ModelLayer`: model catalog, install state, default model selection.
 - `DataLayer`: SwiftData entities and repository logic for sessions, stats, achievements, preferences.
@@ -31,6 +31,8 @@ SwiftData entities:
 - `DailyStatsEntity`
 - `AchievementEntity`
 - `UserPreferenceEntity`
+
+`AppRepository.ensurePreferences()` normalizes legacy preference records (language/default mode/shortcut payloads/first-launch flag) on read.
 
 ## Distribution
 

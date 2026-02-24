@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeDashboardView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
 
     var body: some View {
         ScrollView {
@@ -11,7 +11,11 @@ struct HomeDashboardView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                     StatCard(title: "Words", value: "\(container.usageSnapshot.totalWords)", caption: "Total dictated")
                     StatCard(title: "Sessions", value: "\(container.usageSnapshot.totalSessions)", caption: "Completed")
-                    StatCard(title: "Average WPM", value: String(format: "%.0f", container.usageSnapshot.averageWPM), caption: "Speech speed")
+                    StatCard(
+                        title: "Average WPM",
+                        value: container.usageSnapshot.averageWPM.formatted(.number.precision(.fractionLength(0))),
+                        caption: "Speech speed"
+                    )
                     StatCard(title: "Streak", value: "\(container.usageSnapshot.currentStreakDays) days", caption: "100+ words/day")
                 }
 

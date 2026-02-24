@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DashboardRootView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
     @State private var selectedTab: DashboardTab? = .home
 
     var body: some View {
@@ -47,9 +47,13 @@ struct DashboardRootView: View {
                 }
             }
         }
-        .sheet(isPresented: $container.showOnboarding) {
+        .sheet(
+            isPresented: Binding(
+                get: { container.showOnboarding },
+                set: { container.showOnboarding = $0 }
+            )
+        ) {
             OnboardingView()
-                .environmentObject(container)
                 .frame(minWidth: 620, minHeight: 420)
         }
         .task {
@@ -58,11 +62,6 @@ struct DashboardRootView: View {
         }
         .onChange(of: container.sessionManager.state) { _, _ in
             container.refreshDashboardData()
-        }
-        .onChange(of: selectedTab) { _, value in
-            if let value {
-                container.selectedTab = value
-            }
         }
     }
 

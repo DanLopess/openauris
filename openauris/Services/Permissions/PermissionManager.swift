@@ -1,8 +1,8 @@
 import AVFoundation
 import AppKit
 import ApplicationServices
-import Combine
 import Foundation
+import Observation
 
 enum MicrophonePermissionState: Equatable {
     case undetermined
@@ -12,10 +12,11 @@ enum MicrophonePermissionState: Equatable {
 }
 
 @MainActor
-final class PermissionManager: ObservableObject {
-    @Published private(set) var microphoneGranted: Bool = false
-    @Published private(set) var microphonePermissionState: MicrophonePermissionState = .undetermined
-    @Published private(set) var accessibilityGranted: Bool = false
+@Observable
+final class PermissionManager {
+    private(set) var microphoneGranted: Bool = false
+    private(set) var microphonePermissionState: MicrophonePermissionState = .undetermined
+    private(set) var accessibilityGranted: Bool = false
 
     init() {
         refresh()

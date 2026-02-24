@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsDashboardView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MenuBarContentView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {

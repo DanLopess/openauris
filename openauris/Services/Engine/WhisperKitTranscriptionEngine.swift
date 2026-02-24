@@ -2,15 +2,32 @@ import Foundation
 import WhisperKit
 
 enum WhisperKitConfiguration {
-    static func normalizedModelFolderPath(_ modelFolderPath: String?) -> String? {
+    nonisolated static func normalizedModelFolderPath(_ modelFolderPath: String?) -> String? {
         guard let raw = modelFolderPath?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return nil
         }
         return (raw as NSString).standardizingPath
     }
 
-    static func downloadFlag(modelFolderPath: String?) -> Bool {
+    nonisolated static func downloadFlag(modelFolderPath: String?) -> Bool {
         normalizedModelFolderPath(modelFolderPath) == nil
+    }
+
+    nonisolated static func normalizedLanguageOverride(_ languageOverride: String?) -> String? {
+        guard let raw = languageOverride?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+
+        let normalized = raw.lowercased()
+        return normalized == "auto" ? nil : normalized
+    }
+
+    nonisolated static func decodingOptions(languageOverride: String?) -> DecodingOptions {
+        let normalized = normalizedLanguageOverride(languageOverride)
+        return DecodingOptions(
+            language: normalized,
+            detectLanguage: normalized == nil
+        )
     }
 }
 
@@ -19,6 +36,7 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
 
     private var currentModelID: String = "small"
     private var currentModelFolderPath: String?
+    private var currentLanguageOverride: String?
     private var bufferedSamples: [Float] = []
     private var sourceSampleRate: Double = 16_000
     private var partialText = ""
@@ -33,8 +51,9 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
     private let minimumPartialDecodeSamples = 8_000
     private let maxPartialDecodeWindowSamples = 8 * 16_000
 
-    func prepare(modelID: String, modelFolderPath: String?) async throws {
+    func prepare(modelID: String, modelFolderPath: String?, languageOverride: String?) async throws {
         let normalizedFolderPath = WhisperKitConfiguration.normalizedModelFolderPath(modelFolderPath)
+        let normalizedLanguageOverride = WhisperKitConfiguration.normalizedLanguageOverride(languageOverride)
         let shouldRecreateEngine =
             whisperKit == nil ||
             currentModelID != modelID ||
@@ -42,6 +61,7 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
 
         currentModelID = modelID
         currentModelFolderPath = normalizedFolderPath
+        currentLanguageOverride = normalizedLanguageOverride
 
         guard shouldRecreateEngine else { return }
 
@@ -75,7 +95,7 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
         bufferedSamples.append(contentsOf: frame.samples)
 
         let elapsed = startedAt.map { Date().timeIntervalSince($0) } ?? 0
-        let rounded = String(format: "%.1f", elapsed)
+        let rounded = elapsed.formatted(.number.precision(.fractionLength(1)))
         if partialText.isEmpty || partialText.hasPrefix("Listening…") {
             partialText = "Listening… \(rounded)s"
         }
@@ -98,13 +118,14 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
         startedAt = nil
 
         let audio = resampleIfNeeded(bufferedSamples, from: sourceSampleRate, to: 16_000)
+        let decodeOptions = WhisperKitConfiguration.decodingOptions(languageOverride: currentLanguageOverride)
 
         await waitForTranscriptionSlot()
         transcriptionInFlight = true
         defer { transcriptionInFlight = false }
 
         let engine = try await resolveEngine()
-        let results = try await engine.transcribe(audioArray: audio)
+        let results = try await engine.transcribe(audioArray: audio, decodeOptions: decodeOptions)
         let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         let language = results.first?.language ?? "auto"
         let wordCount = text.openAurisWordCount
@@ -161,7 +182,11 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
 
             let engine = try await resolveEngine()
             var latestProgressText = ""
-            let results: [TranscriptionResult] = try await engine.transcribe(audioArray: audio, callback: { progress in
+            let decodeOptions = WhisperKitConfiguration.decodingOptions(languageOverride: currentLanguageOverride)
+            let results: [TranscriptionResult] = try await engine.transcribe(
+                audioArray: audio,
+                decodeOptions: decodeOptions,
+                callback: { progress in
                 latestProgressText = progress.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return nil
             })

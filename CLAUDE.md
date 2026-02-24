@@ -28,7 +28,7 @@ xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform
 
 **Run a single test class:**
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisTests/DictationStateMachineTests test
+xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisTests/AppRepositoryTests test
 ```
 
 **VS Code tasks:**
@@ -40,14 +40,14 @@ xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform
 
 ## Architecture
 
-The app is a macOS menu bar app built with SwiftUI + SwiftData. All service classes are `@MainActor` `ObservableObject`s wired together in `AppContainer` (the app's composition root).
+The app is a macOS menu bar app built with SwiftUI + SwiftData. Shared app state uses Swift Observation (`@Observable`) and is wired together in `AppContainer` (the app's composition root).
 
 ### Layers (`docs/ARCHITECTURE.md`)
 
 | Layer | Key files |
 |---|---|
 | AppLayer | `AppContainer.swift`, `openaurisApp.swift` |
-| SessionLayer | `DictationSessionManager.swift`, `DictationStateMachine.swift` |
+| SessionLayer | `DictationSessionManager.swift` |
 | AudioLayer | `Services/Audio/AudioCaptureService.swift` |
 | EngineLayer | `Core/TranscriptionEngine.swift` (protocol), `Services/Engine/WhisperKitTranscriptionEngine.swift` |
 | InsertionLayer | `Services/Insertion/AccessibilityTextInsertionService.swift` |
@@ -69,7 +69,6 @@ The app is a macOS menu bar app built with SwiftUI + SwiftData. All service clas
 
 - `TranscriptionEngine` — `prepare` → `startStreaming` → (`appendAudioFrame` loop) → `finishStreaming` / `cancelStreaming`
 - `TextInsertionService` — `insert(_:)` returns `InsertionResult` (.insertedDirectly / .insertedViaPasteFallback / .failed)
-- `DictationStateMachine` — pure static function mapping `(DictationSessionState, DictationHotkeyAction) → DictationSessionState`
 
 ### Persistence
 

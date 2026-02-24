@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
 
     @State private var pageIndex = 0

@@ -1,10 +1,12 @@
 import AppKit
 import Combine
 import Foundation
+import Observation
 import SwiftData
 
+@Observable
 @MainActor
-final class AppContainer: ObservableObject {
+final class AppContainer {
     let modelContainer: ModelContainer
     let repository: AppRepository
     let permissionManager: PermissionManager
@@ -14,27 +16,27 @@ final class AppContainer: ObservableObject {
     let sessionManager: DictationSessionManager
     let hotkeyManager: GlobalHotkeyManager
 
-    @Published var preferences: UserPreferenceEntity?
-    @Published var sessions: [DictationSessionEntity] = []
-    @Published var dailyStats: [DailyStatsEntity] = []
-    @Published var achievements: [AchievementEntity] = []
-    @Published var usageSnapshot = UsageSnapshot(
+    var preferences: UserPreferenceEntity?
+    var sessions: [DictationSessionEntity] = []
+    var dailyStats: [DailyStatsEntity] = []
+    var achievements: [AchievementEntity] = []
+    var usageSnapshot = UsageSnapshot(
         totalWords: 0,
         totalSessions: 0,
         totalSpeakingSeconds: 0,
         averageWPM: 0,
         currentStreakDays: 0
     )
-    @Published var searchQuery: String = "" {
+    var searchQuery: String = "" {
         didSet {
             reloadSessions()
         }
     }
-    @Published var selectedTab: DashboardTab = .home
-    @Published var showOnboarding = false
-    @Published var startupErrorMessage: String?
+    var showOnboarding = false
+    var startupErrorMessage: String?
 
     private var didBootstrap = false
+    private let isUITesting = ProcessInfo.processInfo.arguments.contains("-openauris-ui-testing")
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -86,9 +88,18 @@ final class AppContainer: ObservableObject {
             preferences = prefs
             applyHotkeys(from: prefs)
 
-            let firstLaunch = !(prefs.hasOpenedDashboardOnce ?? false)
-            showOnboarding = firstLaunch
-            if firstLaunch {
+            if isUITesting {
+                showOnboarding = false
+            } else {
+                let firstLaunch = !(prefs.hasOpenedDashboardOnce ?? false)
+                showOnboarding = firstLaunch
+                if firstLaunch {
+                    prefs.hasOpenedDashboardOnce = true
+                    try repository.savePreferences(prefs)
+                }
+            }
+
+            if isUITesting && !(prefs.hasOpenedDashboardOnce ?? false) {
                 prefs.hasOpenedDashboardOnce = true
                 try repository.savePreferences(prefs)
             }
@@ -116,7 +127,7 @@ final class AppContainer: ObservableObject {
     func completeOnboarding() {
         guard let preferences else { return }
 
-        preferences.onboardingCompleted = true
+        preferences.hasOpenedDashboardOnce = true
         showOnboarding = false
 
         do {
@@ -294,13 +305,6 @@ final class AppContainer: ObservableObject {
     }
 
     private func bindAppSignals() {
-        modelManager.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
         NotificationCenter.default.publisher(for: .openAurisToggleDictation)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -316,4 +320,3 @@ final class AppContainer: ObservableObject {
             .store(in: &cancellables)
     }
 }
-

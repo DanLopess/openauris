@@ -9,7 +9,7 @@ struct FinalTranscript: Sendable {
 }
 
 protocol TranscriptionEngine: Sendable {
-    func prepare(modelID: String, modelFolderPath: String?) async throws
+    func prepare(modelID: String, modelFolderPath: String?, languageOverride: String?) async throws
     func startStreaming() async throws
     func appendAudioFrame(_ frame: AudioFrame) async
     func currentPartialText() async -> String
@@ -17,8 +17,12 @@ protocol TranscriptionEngine: Sendable {
     func cancelStreaming() async
 }
 
-protocol TextInsertionService: Sendable {
+@MainActor
+protocol TextInsertionService {
     func insert(_ text: String) async -> InsertionResult
+    func appendText(_ text: String) async -> InsertionResult
+    func focusedApplicationBundleID() -> String
+    func pressBackspace() async
 }
 
 enum InsertionResult: Sendable {

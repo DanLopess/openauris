@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct StatsDashboardView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -26,7 +26,7 @@ struct StatsDashboardView: View {
 
                     VStack(alignment: .trailing) {
                         Text("\(day.words) words")
-                        Text(String(format: "%.0f WPM", day.avgWPM))
+                        Text("\(day.avgWPM.formatted(.number.precision(.fractionLength(0)))) WPM")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

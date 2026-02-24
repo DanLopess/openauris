@@ -20,7 +20,7 @@ OpenAuris V1 delivers a complete dictation experience with these key features:
 ### 🤖 AI Processing
 - **Local-only Whisper transcription** via WhisperKit integration
 - **Model management UI** with automatic installation for default models
-- **Fallback mode** when WhisperKit is not linked
+- **Per-session language control** with `auto` detect or explicit language override
 
 ### 📊 Productivity Features
 - **Session history** with search and deletion capabilities
@@ -56,7 +56,7 @@ Our vision extends beyond dictation to full voice control:
 
 ## Whisper Runtime
 
-`WhisperKitTranscriptionEngine` is implemented and compiles with a fallback mode when WhisperKit is not linked.
+`WhisperKitTranscriptionEngine` is the production runtime and requires WhisperKit.
 
 To enable full WhisperKit transcription, add package dependency:
 
@@ -98,6 +98,12 @@ The repository includes VS Code tasks in `.vscode/tasks.json`:
 
 ```bash
 xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisTests test
+```
+
+UI smoke tests:
+
+```bash
+xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisUITests/openaurisUITests test
 ```
 
 ## Docs

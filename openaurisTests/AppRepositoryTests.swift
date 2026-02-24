@@ -14,6 +14,8 @@ struct AppRepositoryTests {
 
         #expect(preferences.defaultModelID == OpenAurisConstants.defaultModelID)
         #expect(preferences.onboardingCompleted == false)
+        #expect(preferences.hasOpenedDashboardOnce == false)
+        #expect(preferences.languageOverride == "auto")
     }
 
     @Test
@@ -127,5 +129,40 @@ struct AppRepositoryTests {
         #expect(model != nil)
         #expect(model?.installedAt == nil)
         #expect(model?.downloadState == "not_installed")
+    }
+
+    @Test
+    func ensurePreferencesMigratesLegacyPreferenceValues() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+
+        let legacy = UserPreferenceEntity(
+            holdShortcutData: Data(),
+            toggleShortcutData: Data("invalid".utf8),
+            defaultModeRawValue: "legacy_mode",
+            defaultModelID: "   ",
+            languageOverride: " EN ",
+            launchAtLogin: false,
+            insertionPrefersAccessibility: true,
+            onboardingCompleted: true,
+            hasOpenedDashboardOnce: nil
+        )
+        container.mainContext.insert(legacy)
+        try container.mainContext.save()
+
+        let migrated = try repository.ensurePreferences()
+
+        #expect(migrated.hasOpenedDashboardOnce == true)
+        #expect(migrated.defaultModeRawValue == DictationMode.holdToSpeak.rawValue)
+        #expect(migrated.defaultModelID == OpenAurisConstants.defaultModelID)
+        #expect(migrated.languageOverride == "en")
+
+        let hold = try #require(decodedShortcut(from: migrated.holdShortcutData))
+        let toggle = try #require(decodedShortcut(from: migrated.toggleShortcutData))
+        #expect(hold != toggle)
+    }
+
+    private func decodedShortcut(from data: Data) -> ShortcutBinding? {
+        try? JSONDecoder().decode(ShortcutBinding.self, from: data)
     }
 }

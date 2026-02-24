@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HistoryDashboardView: View {
-    @EnvironmentObject private var container: AppContainer
+    @Environment(AppContainer.self) private var container
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -9,7 +9,13 @@ struct HistoryDashboardView: View {
                 .font(.largeTitle.bold())
 
             HStack {
-                TextField("Search transcripts", text: $container.searchQuery)
+                TextField(
+                    "Search transcripts",
+                    text: Binding(
+                        get: { container.searchQuery },
+                        set: { container.searchQuery = $0 }
+                    )
+                )
                     .textFieldStyle(.roundedBorder)
 
                 Button("Clear History", role: .destructive) {

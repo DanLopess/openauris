@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ListeningBubbleView: View {
-    @ObservedObject var viewModel: BubbleViewModel
+    var viewModel: BubbleViewModel
     var onDrag: ((CGSize, Bool) -> Void)? = nil
 
     var body: some View {

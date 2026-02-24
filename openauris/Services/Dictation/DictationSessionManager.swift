@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
 enum DictationSessionState: Equatable {
@@ -11,15 +11,16 @@ enum DictationSessionState: Equatable {
 }
 
 @MainActor
-final class DictationSessionManager: ObservableObject {
-    @Published private(set) var state: DictationSessionState = .idle
-    @Published private(set) var partialText: String = ""
-    @Published private(set) var lastTranscript: String = ""
-    @Published private(set) var errorMessage: String?
+@Observable
+final class DictationSessionManager {
+    private(set) var state: DictationSessionState = .idle
+    private(set) var partialText: String = ""
+    private(set) var lastTranscript: String = ""
+    private(set) var errorMessage: String?
 
     private let audioCaptureService: AudioCaptureService
     private let transcriptionEngine: any TranscriptionEngine
-    private let insertionService: AccessibilityTextInsertionService
+    private let insertionService: any TextInsertionService
     private let repository: AppRepository
     private let modelManager: WhisperModelManager
     private let permissionManager: PermissionManager
@@ -45,7 +46,7 @@ final class DictationSessionManager: ObservableObject {
     init(
         audioCaptureService: AudioCaptureService,
         transcriptionEngine: any TranscriptionEngine,
-        insertionService: AccessibilityTextInsertionService,
+        insertionService: any TextInsertionService,
         repository: AppRepository,
         modelManager: WhisperModelManager,
         permissionManager: PermissionManager,
@@ -164,6 +165,7 @@ final class DictationSessionManager: ObservableObject {
             overlayController.updateAndShow()
 
             let modelID = modelManager.defaultModelID
+            let languageOverride = try repository.ensurePreferences().languageOverride
             let modelFolderPath = try await modelManager.ensureModelInstalled(modelID)
             try Task.checkCancellation()
             guard mode != .holdToSpeak || holdShortcutIsPressed else {
@@ -171,12 +173,20 @@ final class DictationSessionManager: ObservableObject {
             }
 
             do {
-                try await transcriptionEngine.prepare(modelID: modelID, modelFolderPath: modelFolderPath)
+                try await transcriptionEngine.prepare(
+                    modelID: modelID,
+                    modelFolderPath: modelFolderPath,
+                    languageOverride: languageOverride
+                )
             } catch {
                 // Recover from partially written/corrupted local model artifacts.
                 try await modelManager.reinstall(modelID: modelID)
                 let repairedModelFolderPath = try await modelManager.ensureModelInstalled(modelID)
-                try await transcriptionEngine.prepare(modelID: modelID, modelFolderPath: repairedModelFolderPath)
+                try await transcriptionEngine.prepare(
+                    modelID: modelID,
+                    modelFolderPath: repairedModelFolderPath,
+                    languageOverride: languageOverride
+                )
             }
             try Task.checkCancellation()
             guard mode != .holdToSpeak || holdShortcutIsPressed else {
@@ -230,22 +240,22 @@ final class DictationSessionManager: ObservableObject {
 
         do {
             let transcript = try await transcriptionEngine.finishStreaming()
-            let cleaned = sanitizeTranscriptText(transcript.text)
-            let cleanText = cleaned.isEmpty ? "..." : cleaned
-
-            guard !cleanText.isEmpty else {
-                throw NSError(domain: "OpenAuris", code: 2, userInfo: [NSLocalizedDescriptionKey: "No speech detected."])
-            }
+            let cleaned = try DictationFinalization.cleanedFinalText(from: transcript.text)
 
             state = .inserting
             overlayController.updateAndShow()
 
+            let hadRealtimeInsertions = insertedCharCount > 0
+
             // Replace whatever we inserted incrementally with the final accurate text.
             // For terminal apps insertedCharCount is 0 (nothing was inserted during streaming),
             // so replaceInsertedText simply pastes the final text directly.
-            await replaceInsertedText(with: cleanText)
-
-            let insertionMethod: String = "accessibility_realtime"
+            let insertionResult = await replaceInsertedText(with: cleaned)
+            try DictationFinalization.assertInsertionSucceeded(insertionResult)
+            let insertionMethod = DictationFinalization.insertionMethod(
+                from: insertionResult,
+                hadRealtimeInsertions: hadRealtimeInsertions
+            )
 
             let storedTranscript = FinalTranscript(
                 text: cleaned,
@@ -268,7 +278,7 @@ final class DictationSessionManager: ObservableObject {
                 )
             }
 
-            lastTranscript = cleanText
+            lastTranscript = cleaned
             bubbleViewModel.state = .success
             overlayController.updateAndShow()
             dismissBubbleAfterDelay()
@@ -357,19 +367,27 @@ final class DictationSessionManager: ObservableObject {
         lastPartialInsertAt = Date()
     }
 
-    private func replaceInsertedText(with newText: String) async {
+    private func replaceInsertedText(with newText: String) async -> InsertionResult {
+        let hadRealtimeInsertions = insertedCharCount > 0
+
         // Delete only what we previously inserted at the cursor.
         // For terminal apps this is always 0, so the loop is skipped.
-        if insertedCharCount > 0 {
+        if hadRealtimeInsertions {
             for _ in 0..<insertedCharCount {
                 await insertionService.pressBackspace()
             }
             insertedCharCount = 0
         }
 
-        if !newText.isEmpty {
-            _ = await insertionService.appendText(newText)
+        guard !newText.isEmpty else {
+            return .failed(reason: "Transcript is empty.")
         }
+
+        if hadRealtimeInsertions {
+            return await insertionService.appendText(newText)
+        }
+
+        return await insertionService.insert(newText)
     }
 
     private func resetInsertionState() {

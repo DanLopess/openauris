@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 import WhisperKit
 
@@ -31,12 +31,13 @@ enum WhisperModelManagerError: LocalizedError {
 }
 
 @MainActor
-final class WhisperModelManager: ObservableObject {
-    @Published private(set) var models: [WhisperModelDescriptor] = WhisperModelDescriptor.curated
-    @Published private(set) var installedModelIDs: Set<String> = []
-    @Published private(set) var defaultModelID: String = OpenAurisConstants.defaultModelID
-    @Published private(set) var downloadProgress: [String: Double] = [:]
-    @Published private(set) var downloadStateByModelID: [String: String] = [:]
+@Observable
+final class WhisperModelManager {
+    private(set) var models: [WhisperModelDescriptor] = WhisperModelDescriptor.curated
+    private(set) var installedModelIDs: Set<String> = []
+    private(set) var defaultModelID: String = OpenAurisConstants.defaultModelID
+    private(set) var downloadProgress: [String: Double] = [:]
+    private(set) var downloadStateByModelID: [String: String] = [:]
 
     private let repository: AppRepository
     private var installTasks: [String: Task<Void, Error>] = [:]

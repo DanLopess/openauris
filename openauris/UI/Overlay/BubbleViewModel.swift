@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 enum BubbleState: Equatable {
     case hidden
@@ -10,9 +10,10 @@ enum BubbleState: Equatable {
 }
 
 @MainActor
-final class BubbleViewModel: ObservableObject {
-    @Published var state: BubbleState = .hidden
-    @Published var level: Float = 0
+@Observable
+final class BubbleViewModel {
+    var state: BubbleState = .hidden
+    var level: Float = 0
 
     var isVisible: Bool {
         state != .hidden

@@ -19,6 +19,8 @@ struct AchievementDefinition: Sendable {
 
 @MainActor
 final class AppRepository {
+    private static let supportedLanguageOverrides: Set<String> = ["auto", "en", "pt", "es"]
+
     private let context: ModelContext
     private let calendar = Calendar.current
 
@@ -28,7 +30,7 @@ final class AppRepository {
 
     func ensurePreferences() throws -> UserPreferenceEntity {
         if let existing = try context.fetch(FetchDescriptor<UserPreferenceEntity>()).first {
-            return existing
+            return try migrateLegacyPreferencesIfNeeded(existing)
         }
 
         let encoder = JSONEncoder()
@@ -278,6 +280,71 @@ final class AppRepository {
                 context.insert(entity)
             }
         }
+    }
+
+    private func migrateLegacyPreferencesIfNeeded(_ preferences: UserPreferenceEntity) throws -> UserPreferenceEntity {
+        var hasChanges = false
+
+        if preferences.hasOpenedDashboardOnce == nil {
+            preferences.hasOpenedDashboardOnce = preferences.onboardingCompleted
+            hasChanges = true
+        }
+
+        let normalizedLanguage = normalizedLanguageOverride(preferences.languageOverride)
+        if preferences.languageOverride != normalizedLanguage {
+            preferences.languageOverride = normalizedLanguage
+            hasChanges = true
+        }
+
+        if DictationMode(rawValue: preferences.defaultModeRawValue) == nil {
+            preferences.defaultModeRawValue = DictationMode.holdToSpeak.rawValue
+            hasChanges = true
+        }
+
+        if preferences.defaultModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            preferences.defaultModelID = OpenAurisConstants.defaultModelID
+            hasChanges = true
+        }
+
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        let decodedHold = try? decoder.decode(ShortcutBinding.self, from: preferences.holdShortcutData)
+        let decodedToggle = try? decoder.decode(ShortcutBinding.self, from: preferences.toggleShortcutData)
+        let resolvedHold = decodedHold ?? .defaultHold
+        var resolvedToggle = decodedToggle ?? .defaultToggle
+
+        if resolvedHold == resolvedToggle {
+            resolvedToggle = (resolvedHold == .defaultToggle) ? .defaultHold : .defaultToggle
+            hasChanges = true
+        }
+
+        if decodedHold == nil || preferences.holdShortcutData.isEmpty {
+            preferences.holdShortcutData = try encoder.encode(resolvedHold)
+            hasChanges = true
+        }
+
+        if decodedToggle == nil || preferences.toggleShortcutData.isEmpty || resolvedToggle != decodedToggle {
+            preferences.toggleShortcutData = try encoder.encode(resolvedToggle)
+            hasChanges = true
+        }
+
+        if hasChanges {
+            try context.save()
+        }
+
+        return preferences
+    }
+
+    private func normalizedLanguageOverride(_ rawValue: String) -> String {
+        let normalized = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard !normalized.isEmpty, Self.supportedLanguageOverrides.contains(normalized) else {
+            return "auto"
+        }
+
+        return normalized
     }
 }
 

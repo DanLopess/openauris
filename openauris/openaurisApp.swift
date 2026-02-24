@@ -3,12 +3,12 @@ import SwiftData
 
 @main
 struct OpenAurisApp: App {
-    @StateObject private var container = AppContainer()
+    @State private var container = AppContainer()
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarContentView()
-                .environmentObject(container)
+                .environment(container)
         } label: {
             MenuBarLabelView()
         }
@@ -16,7 +16,7 @@ struct OpenAurisApp: App {
 
         WindowGroup(id: OpenAurisConstants.dashboardWindowID) {
             DashboardRootView()
-                .environmentObject(container)
+                .environment(container)
                 .modelContainer(container.modelContainer)
         }
         .defaultSize(CGSize(width: 1200, height: 760))
