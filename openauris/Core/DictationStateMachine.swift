@@ -17,6 +17,8 @@ struct DictationStateMachine {
             return .listening(.toggle)
         case (.listening(.toggle), .togglePress):
             return .processing
+        case (.listening(.holdToSpeak), .togglePress):
+            return .processing
         default:
             return current
         }

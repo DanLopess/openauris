@@ -97,4 +97,35 @@ struct AppRepositoryTests {
         let snapshot = try repository.usageSnapshot()
         #expect(snapshot.currentStreakDays == 2)
     }
+
+    @Test
+    func upsertModelCanClearInstalledAt() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+        let installedAt = Date()
+
+        try repository.upsertModel(
+            modelID: "small",
+            displayName: "Small",
+            sizeBytes: 500_000_000,
+            state: "installed",
+            isDefault: true,
+            installedAt: installedAt
+        )
+
+        try repository.upsertModel(
+            modelID: "small",
+            displayName: "Small",
+            sizeBytes: 500_000_000,
+            state: "not_installed",
+            isDefault: true,
+            installedAt: nil,
+            overwriteInstalledAt: true
+        )
+
+        let model = try repository.fetchModels().first { $0.modelID == "small" }
+        #expect(model != nil)
+        #expect(model?.installedAt == nil)
+        #expect(model?.downloadState == "not_installed")
+    }
 }

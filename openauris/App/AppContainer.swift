@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import SwiftData
@@ -85,7 +86,13 @@ final class AppContainer: ObservableObject {
             preferences = prefs
             applyHotkeys(from: prefs)
 
-            showOnboarding = !prefs.onboardingCompleted
+            let firstLaunch = !(prefs.hasOpenedDashboardOnce ?? false)
+            showOnboarding = firstLaunch
+            if firstLaunch {
+                prefs.hasOpenedDashboardOnce = true
+                try repository.savePreferences(prefs)
+            }
+
             permissionManager.refresh()
 
             await modelManager.installDefaultModelIfNeeded()
@@ -198,7 +205,12 @@ final class AppContainer: ObservableObject {
 
         let encoder = JSONEncoder()
         do {
+            let decoder = JSONDecoder()
+            let currentToggle = (try? decoder.decode(ShortcutBinding.self, from: preferences.toggleShortcutData)) ?? .defaultToggle
+            let resolvedToggle = resolveDistinctToggleShortcut(hold: shortcut, requestedToggle: currentToggle)
+
             preferences.holdShortcutData = try encoder.encode(shortcut)
+            preferences.toggleShortcutData = try encoder.encode(resolvedToggle)
             try repository.savePreferences(preferences)
             applyHotkeys(from: preferences)
         } catch {
@@ -211,7 +223,11 @@ final class AppContainer: ObservableObject {
 
         let encoder = JSONEncoder()
         do {
-            preferences.toggleShortcutData = try encoder.encode(shortcut)
+            let decoder = JSONDecoder()
+            let currentHold = (try? decoder.decode(ShortcutBinding.self, from: preferences.holdShortcutData)) ?? .defaultHold
+            let resolvedToggle = resolveDistinctToggleShortcut(hold: currentHold, requestedToggle: shortcut)
+
+            preferences.toggleShortcutData = try encoder.encode(resolvedToggle)
             try repository.savePreferences(preferences)
             applyHotkeys(from: preferences)
         } catch {
@@ -249,12 +265,42 @@ final class AppContainer: ObservableObject {
         let decoder = JSONDecoder()
 
         let holdShortcut = (try? decoder.decode(ShortcutBinding.self, from: preferences.holdShortcutData)) ?? .defaultHold
-        let toggleShortcut = (try? decoder.decode(ShortcutBinding.self, from: preferences.toggleShortcutData)) ?? .defaultToggle
+        let requestedToggle = (try? decoder.decode(ShortcutBinding.self, from: preferences.toggleShortcutData)) ?? .defaultToggle
+        let toggleShortcut = resolveDistinctToggleShortcut(hold: holdShortcut, requestedToggle: requestedToggle)
 
         hotkeyManager.registerShortcuts(hold: holdShortcut, toggle: toggleShortcut)
+
+        if toggleShortcut != requestedToggle {
+            startupErrorMessage = "Hold and toggle shortcuts cannot be the same. Toggle was reset to \(toggleShortcut.readable)."
+        }
+    }
+
+    private func resolveDistinctToggleShortcut(hold: ShortcutBinding, requestedToggle: ShortcutBinding) -> ShortcutBinding {
+        guard hold == requestedToggle else { return requestedToggle }
+
+        let fallbackCandidates: [ShortcutBinding] = [
+            .defaultToggle,
+            ShortcutBinding(
+                keyCode: 36,
+                modifiersRawValue: (NSEvent.ModifierFlags.control.union(.command)).rawValue
+            ),
+            ShortcutBinding(
+                keyCode: 49,
+                modifiersRawValue: (NSEvent.ModifierFlags.control.union(.command)).rawValue
+            )
+        ]
+
+        return fallbackCandidates.first(where: { $0 != hold }) ?? .defaultToggle
     }
 
     private func bindAppSignals() {
+        modelManager.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .openAurisToggleDictation)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -270,3 +316,4 @@ final class AppContainer: ObservableObject {
             .store(in: &cancellables)
     }
 }
+

@@ -42,6 +42,7 @@ final class AudioCaptureService {
         guard isRunning else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        engine.reset()
         isRunning = false
     }
 

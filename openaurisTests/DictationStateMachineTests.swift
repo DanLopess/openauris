@@ -22,4 +22,10 @@ struct DictationStateMachineTests {
         state = DictationStateMachine.nextState(current: state, action: .togglePress)
         #expect(state == .processing)
     }
+
+    @Test
+    func togglePressStopsActiveHoldToSpeakSession() {
+        let state = DictationStateMachine.nextState(current: .listening(.holdToSpeak), action: .togglePress)
+        #expect(state == .processing)
+    }
 }

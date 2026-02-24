@@ -12,6 +12,10 @@ struct ModelsDashboardView: View {
                 .foregroundStyle(.secondary)
 
             List(container.modelManager.models) { model in
+                let isInstalled = container.modelManager.isModelInstalled(model.id)
+                let isDownloading = container.modelManager.isModelDownloading(model.id)
+                let progress = container.modelManager.downloadProgress[model.id]
+
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -33,11 +37,33 @@ struct ModelsDashboardView: View {
                         Text(ByteCountFormatter.string(fromByteCount: model.estimatedSizeBytes, countStyle: .file))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+
+                        if isDownloading {
+                            HStack(spacing: 8) {
+                                if let progress, progress > 0 {
+                                    Text("Downloading \(Int(progress * 100))%")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("Downloading...")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
 
                     Spacer()
 
-                    if container.modelManager.installedModelIDs.contains(model.id) {
+                    if isDownloading {
+                        if let progress {
+                            ProgressView(value: progress)
+                                .frame(width: 140)
+                        } else {
+                            ProgressView()
+                                .frame(width: 140)
+                        }
+                    } else if isInstalled {
                         Button("Make Default") {
                             container.makeDefaultModel(model.id)
                         }
@@ -51,15 +77,10 @@ struct ModelsDashboardView: View {
                             .buttonStyle(.bordered)
                         }
                     } else {
-                        if let progress = container.modelManager.downloadProgress[model.id], progress < 1 {
-                            ProgressView(value: progress)
-                                .frame(width: 120)
-                        } else {
-                            Button("Download") {
-                                container.requestModelInstall(model)
-                            }
-                            .buttonStyle(.borderedProminent)
+                        Button("Download") {
+                            container.requestModelInstall(model)
                         }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
                 .padding(.vertical, 6)

@@ -1,9 +1,7 @@
 import Combine
 import Foundation
 
-#if canImport(WhisperKit)
 import WhisperKit
-#endif
 
 struct WhisperModelDescriptor: Identifiable, Sendable {
     let id: String
@@ -18,14 +16,30 @@ struct WhisperModelDescriptor: Identifiable, Sendable {
     ]
 }
 
+enum WhisperModelManagerError: LocalizedError {
+    case unknownModel(String)
+    case installedArtifactsMissing(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unknownModel(let modelID):
+            return "Unknown model: \(modelID)."
+        case .installedArtifactsMissing(let modelID):
+            return "Model artifacts are missing for \(modelID)."
+        }
+    }
+}
+
 @MainActor
 final class WhisperModelManager: ObservableObject {
     @Published private(set) var models: [WhisperModelDescriptor] = WhisperModelDescriptor.curated
     @Published private(set) var installedModelIDs: Set<String> = []
     @Published private(set) var defaultModelID: String = OpenAurisConstants.defaultModelID
     @Published private(set) var downloadProgress: [String: Double] = [:]
+    @Published private(set) var downloadStateByModelID: [String: String] = [:]
 
     private let repository: AppRepository
+    private var installTasks: [String: Task<Void, Error>] = [:]
 
     init(repository: AppRepository) {
         self.repository = repository
@@ -37,48 +51,146 @@ final class WhisperModelManager: ObservableObject {
             return
         }
 
-        installedModelIDs = Set(stored.filter { $0.installedAt != nil }.map(\.modelID))
+        downloadStateByModelID = Dictionary(uniqueKeysWithValues: stored.map { ($0.modelID, $0.downloadState) })
         defaultModelID = stored.first(where: { $0.isDefault })?.modelID ?? OpenAurisConstants.defaultModelID
+
+        var validatedInstalledIDs = Set<String>()
+        for model in stored {
+            if model.installedAt != nil && hasValidCachedArtifacts(for: model.modelID) {
+                validatedInstalledIDs.insert(model.modelID)
+                downloadStateByModelID[model.modelID] = "installed"
+                continue
+            }
+
+            if model.installedAt != nil || model.downloadState == "installed" {
+                try? repository.upsertModel(
+                    modelID: model.modelID,
+                    displayName: model.displayName,
+                    sizeBytes: model.sizeBytes,
+                    state: "not_installed",
+                    isDefault: model.isDefault,
+                    installedAt: nil,
+                    lastUsedAt: nil,
+                    overwriteInstalledAt: true,
+                    overwriteLastUsedAt: true
+                )
+                downloadStateByModelID[model.modelID] = "not_installed"
+            }
+        }
+
+        installedModelIDs = validatedInstalledIDs
     }
 
     func installDefaultModelIfNeeded() async {
-        if installedModelIDs.contains(defaultModelID) {
-            return
-        }
-
-        guard let descriptor = models.first(where: { $0.id == defaultModelID }) else {
-            return
-        }
-
         do {
-            try await install(model: descriptor)
+            _ = try await ensureModelInstalled(defaultModelID)
         } catch {
             // Keep app responsive if install fails; dashboard exposes retry controls.
         }
     }
 
+    func ensureModelInstalled(_ modelID: String) async throws -> String {
+        guard let descriptor = models.first(where: { $0.id == modelID }) else {
+            throw WhisperModelManagerError.unknownModel(modelID)
+        }
+
+        if installedModelIDs.contains(modelID) && !hasValidCachedArtifacts(for: modelID) {
+            installedModelIDs.remove(modelID)
+            downloadStateByModelID[modelID] = "not_installed"
+        }
+
+        try await install(model: descriptor)
+
+        guard let folderPath = resolvedModelFolderPath(for: modelID) else {
+            throw WhisperModelManagerError.installedArtifactsMissing(modelID)
+        }
+
+        return folderPath
+    }
+
+    func reinstall(modelID: String) async throws {
+        guard let descriptor = models.first(where: { $0.id == modelID }) else {
+            throw WhisperModelManagerError.unknownModel(modelID)
+        }
+
+        if let existingTask = installTasks[modelID] {
+            _ = try? await existingTask.value
+        }
+
+        removeCachedArtifacts(for: modelID)
+        installedModelIDs.remove(modelID)
+        downloadProgress.removeValue(forKey: modelID)
+        downloadStateByModelID[modelID] = "not_installed"
+
+        try repository.upsertModel(
+            modelID: descriptor.id,
+            displayName: descriptor.displayName,
+            sizeBytes: descriptor.estimatedSizeBytes,
+            state: "not_installed",
+            isDefault: descriptor.id == defaultModelID,
+            installedAt: nil,
+            lastUsedAt: nil,
+            overwriteInstalledAt: true,
+            overwriteLastUsedAt: true
+        )
+
+        try await install(model: descriptor)
+    }
+
     func install(model: WhisperModelDescriptor) async throws {
+        if installedModelIDs.contains(model.id) {
+            return
+        }
+
+        if let existingTask = installTasks[model.id] {
+            try await existingTask.value
+            return
+        }
+
+        let installTask = Task { @MainActor in
+            try await self.performInstall(model: model)
+        }
+        installTasks[model.id] = installTask
+        defer { installTasks[model.id] = nil }
+
+        do {
+            try await installTask.value
+        } catch {
+            downloadProgress.removeValue(forKey: model.id)
+            downloadStateByModelID[model.id] = "not_installed"
+            try? repository.upsertModel(
+                modelID: model.id,
+                displayName: model.displayName,
+                sizeBytes: model.estimatedSizeBytes,
+                state: "not_installed",
+                isDefault: model.id == defaultModelID,
+                installedAt: nil,
+                lastUsedAt: nil,
+                overwriteInstalledAt: true,
+                overwriteLastUsedAt: true
+            )
+            throw error
+        }
+    }
+
+    private func performInstall(model: WhisperModelDescriptor) async throws {
+        downloadStateByModelID[model.id] = "downloading"
         try repository.upsertModel(
             modelID: model.id,
             displayName: model.displayName,
             sizeBytes: model.estimatedSizeBytes,
             state: "downloading",
-            isDefault: model.id == defaultModelID
+            isDefault: model.id == defaultModelID,
+            installedAt: nil,
+            overwriteInstalledAt: true
         )
         downloadProgress[model.id] = 0
 
-        #if canImport(WhisperKit)
         _ = try await WhisperKit.download(variant: model.id) { [weak self] progress in
             Task { @MainActor [weak self] in
                 self?.downloadProgress[model.id] = progress.fractionCompleted
             }
         }
-        #else
-        for step in 1...20 {
-            try await Task.sleep(nanoseconds: 120_000_000)
-            downloadProgress[model.id] = Double(step) / 20.0
-        }
-        #endif
 
         try repository.upsertModel(
             modelID: model.id,
@@ -91,7 +203,15 @@ final class WhisperModelManager: ObservableObject {
         )
 
         installedModelIDs.insert(model.id)
+        downloadStateByModelID[model.id] = "installed"
         downloadProgress[model.id] = 1
+    }
+
+    private func removeCachedArtifacts(for modelID: String) {
+        let cachedFolders = cachedModelFolders(for: modelID)
+        for url in cachedFolders {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     func setDefaultModel(_ modelID: String) {
@@ -106,6 +226,7 @@ final class WhisperModelManager: ObservableObject {
                     state: installedModelIDs.contains(model.id) ? "installed" : "not_installed",
                     isDefault: model.id == modelID
                 )
+                downloadStateByModelID[model.id] = installedModelIDs.contains(model.id) ? "installed" : "not_installed"
             } catch {
                 continue
             }
@@ -115,6 +236,9 @@ final class WhisperModelManager: ObservableObject {
     func remove(modelID: String) {
         guard modelID != defaultModelID else { return }
         installedModelIDs.remove(modelID)
+        downloadProgress.removeValue(forKey: modelID)
+        downloadStateByModelID[modelID] = "not_installed"
+        removeCachedArtifacts(for: modelID)
 
         if let descriptor = models.first(where: { $0.id == modelID }) {
             do {
@@ -125,11 +249,81 @@ final class WhisperModelManager: ObservableObject {
                     state: "not_installed",
                     isDefault: false,
                     installedAt: nil,
-                    lastUsedAt: nil
+                    lastUsedAt: nil,
+                    overwriteInstalledAt: true,
+                    overwriteLastUsedAt: true
                 )
             } catch {
                 return
             }
         }
+    }
+
+    func isModelInstalled(_ modelID: String) -> Bool {
+        installedModelIDs.contains(modelID)
+    }
+
+    func isModelDownloading(_ modelID: String) -> Bool {
+        if let progress = downloadProgress[modelID], progress < 1 {
+            return true
+        }
+        return downloadStateByModelID[modelID] == "downloading"
+    }
+
+    func modelFolderPathIfAvailable(_ modelID: String) -> String? {
+        resolvedModelFolderPath(for: modelID)
+    }
+
+    private func hasValidCachedArtifacts(for modelID: String) -> Bool {
+        for folder in cachedModelFolders(for: modelID) {
+            if hasRequiredArtifacts(in: folder) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func resolvedModelFolderPath(for modelID: String) -> String? {
+        cachedModelFolders(for: modelID)
+            .first(where: { hasRequiredArtifacts(in: $0) })
+            .map(\.path)
+    }
+
+    private func hasRequiredArtifacts(in folder: URL) -> Bool {
+        let requiredRelativePaths = [
+            "AudioEncoder.mlmodelc/weights/weight.bin",
+            "MelSpectrogram.mlmodelc/weights/weight.bin",
+            "TextDecoder.mlmodelc/weights/weight.bin"
+        ]
+
+        for relativePath in requiredRelativePaths {
+            let artifactURL = folder.appending(path: relativePath)
+            guard
+                let attributes = try? FileManager.default.attributesOfItem(atPath: artifactURL.path),
+                let fileSize = attributes[.size] as? NSNumber,
+                fileSize.intValue > 0
+            else {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private func cachedModelFolders(for modelID: String) -> [URL] {
+        let cacheRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Documents/huggingface/models/argmaxinc/whisperkit-coreml", directoryHint: .isDirectory)
+
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: cacheRoot,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        let marker = "whisper-\(modelID.lowercased())"
+        return contents.filter { $0.lastPathComponent.lowercased().contains(marker) }
     }
 }

@@ -9,7 +9,7 @@ struct FinalTranscript: Sendable {
 }
 
 protocol TranscriptionEngine: Sendable {
-    func prepare(modelID: String) async throws
+    func prepare(modelID: String, modelFolderPath: String?) async throws
     func startStreaming() async throws
     func appendAudioFrame(_ frame: AudioFrame) async
     func currentPartialText() async -> String

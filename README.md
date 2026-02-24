@@ -1,32 +1,58 @@
 # OpenAuris
 
-OpenAuris is an open-source, privacy-first dictation app for macOS.
+![OpenAuris Logo](docs/branding/logo-source-light.png)
 
-It is designed as a lightweight Apple-native alternative to hosted whisper apps, with local-only processing, global shortcuts, and a polished menu bar workflow.
+OpenAuris is an open-source, privacy-first dictation app for macOS that lets you control your computer with your voice. Currently focused on flawless dictation, with voice control features planned for future releases.
 
-## Current V1 Implementation
+Designed as a lightweight Apple-native alternative to hosted whisper apps, OpenAuris offers local-only processing, global shortcuts, and a polished menu bar workflow for seamless voice-to-text transcription.
 
-- Menu bar-first app shell with dashboard window.
-- Bottom-center listening bubble overlay with live status.
-- Two dictation trigger modes:
-  - Hold to speak.
-  - Toggle start/stop.
-- App Intents shortcuts for automations in Apple Shortcuts.
-- Model management UI with auto-install flow for the default model.
-- Session history with search and deletion.
-- Local stats:
-  - Total words.
-  - Session count.
-  - Average WPM.
-  - Current streak.
-- Achievements:
-  - First Session.
-  - 1,000 Words.
-  - 7-Day Streak.
-  - 25 Sessions.
-  - 10,000 Words.
-- Local-only storage via SwiftData.
-- Accessibility-first text insertion with paste fallback.
+## 🎯 Current V1 Implementation
+
+OpenAuris V1 delivers a complete dictation experience with these key features:
+
+### 🎤 Dictation Core
+- **Menu bar-first design** with quick-access dashboard window
+- **Bottom-center listening bubble** with real-time status indicators
+- **Flexible trigger modes**:
+  - Hold-to-speak for quick dictation
+  - Toggle start/stop for longer sessions
+
+### 🤖 AI Processing
+- **Local-only Whisper transcription** via WhisperKit integration
+- **Model management UI** with automatic installation for default models
+- **Fallback mode** when WhisperKit is not linked
+
+### 📊 Productivity Features
+- **Session history** with search and deletion capabilities
+- **Comprehensive statistics**:
+  - Total words transcribed
+  - Session count tracking
+  - Average words per minute (WPM)
+  - Current streak counter
+- **Achievement system** to motivate regular use:
+  - First Session
+  - 1,000 Words
+  - 7-Day Streak
+  - 25 Sessions
+  - 10,000 Words
+
+### 🔒 Privacy & Integration
+- **Local-only storage** via SwiftData - your data never leaves your device
+- **Accessibility-first text insertion** with intelligent paste fallback
+- **App Intents shortcuts** for Apple Shortcuts automation
+- **Global hotkeys** for instant access from any application
+
+## 🚀 Future Roadmap
+
+Our vision extends beyond dictation to full voice control:
+
+### Upcoming Features
+- **Voice commands** for system and application control
+- **Custom command creation** for personalized workflows
+- **Natural language processing** for contextual understanding
+- **Multi-language support** for global accessibility
+
+> ⚠️ **Note**: Voice control features will be implemented once dictation reaches flawless performance and stability.
 
 ## Whisper Runtime
 
@@ -46,13 +72,32 @@ To enable full WhisperKit transcription, add package dependency:
 ## Build
 
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' build
+xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
 ```
+
+## Run
+
+Build, then open the generated app bundle:
+
+```bash
+xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
+open .build/Build/Products/Debug/openauris.app
+```
+
+> Note: `xcodebuild` does not support a `run` build action in this setup. Launch with `open` after build.
+
+## VS Code Tasks
+
+The repository includes VS Code tasks in `.vscode/tasks.json`:
+
+- `Build OpenAuris`: builds Debug using `-derivedDataPath .build`
+- `Run OpenAuris`: depends on build, then launches `.build/Build/Products/Debug/openauris.app`
+- `Run Tests`: runs `openaurisTests` using the same derived data path
 
 ## Test
 
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -only-testing:openaurisTests test
+xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisTests test
 ```
 
 ## Docs

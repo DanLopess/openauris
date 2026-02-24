@@ -20,8 +20,36 @@ final class AccessibilityTextInsertionService: TextInsertionService {
         return .failed(reason: "Unable to insert text into the focused app.")
     }
 
+    /// Appends text at the current cursor position using paste only.
+    /// Unlike `insert`, this never calls `insertViaAccessibility` which would
+    /// replace the entire field value instead of appending at the cursor.
+    func appendText(_ text: String) async -> InsertionResult {
+        guard !text.isEmpty else {
+            return .failed(reason: "Text is empty.")
+        }
+        if await insertViaPasteboardFallback(text) {
+            return .insertedViaPasteFallback
+        }
+        return .failed(reason: "Unable to append text into the focused app.")
+    }
+
     func focusedApplicationBundleID() -> String {
         NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
+    }
+
+    func pressBackspace() async {
+        guard let source = CGEventSource(stateID: .combinedSessionState),
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false)
+        else {
+            return
+        }
+        
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+        
+        // Small delay to allow the system to process
+        try? await Task.sleep(nanoseconds: 5_000_000) // 5ms
     }
 
     private func insertViaAccessibility(_ text: String) -> Bool {
@@ -60,7 +88,8 @@ final class AccessibilityTextInsertionService: TextInsertionService {
         let eventPosted = postCommandV()
 
         // Restore clipboard shortly after paste.
-        try? await Task.sleep(nanoseconds: 350_000_000)
+        // 150 ms is sufficient for apps to process Cmd+V while keeping latency low.
+        try? await Task.sleep(nanoseconds: 150_000_000)
         pasteboard.clearContents()
         if let previousString {
             _ = pasteboard.setString(previousString, forType: .string)

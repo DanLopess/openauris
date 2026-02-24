@@ -27,8 +27,20 @@ final class DictationSessionManager: ObservableObject {
     private let overlayController: OverlayPanelController
 
     private var partialTask: Task<Void, Never>?
+    private var beginTask: Task<Void, Never>?
+    private var streamingActive = false
+    private var holdShortcutIsPressed = false
+    private var lastToggleActionAt: Date?
     private var startedAt: Date?
     private var currentTargetBundleID: String = "unknown"
+    private var isCurrentAppTerminal: Bool = false
+
+    // Insertion tracking (normal apps only)
+    private var lastInsertedText: String = ""
+    private var insertedCharCount: Int = 0
+    private var isInsertingPartial = false
+    private var lastPartialInsertAt: Date = .distantPast
+    private let minInsertInterval: TimeInterval = 0.8
 
     init(
         audioCaptureService: AudioCaptureService,
@@ -55,32 +67,68 @@ final class DictationSessionManager: ObservableObject {
     func handleHotkeyAction(_ action: GlobalHotkeyManager.Action) {
         switch action {
         case .holdDown:
-            Task { await beginSession(mode: .holdToSpeak) }
+            guard !holdShortcutIsPressed else { return }
+            holdShortcutIsPressed = true
+            startSession(mode: .holdToSpeak)
         case .holdUp:
+            holdShortcutIsPressed = false
             if case .listening(.holdToSpeak) = state {
-                Task { await endSession(mode: .holdToSpeak) }
+                stopSession(mode: .holdToSpeak)
+            } else {
+                beginTask?.cancel()
+                beginTask = nil
             }
         case .toggle:
+            let now = Date()
+            if let lastToggleActionAt, now.timeIntervalSince(lastToggleActionAt) < 0.2 {
+                return
+            }
+            self.lastToggleActionAt = now
             switch state {
-            case .listening(.toggle):
-                Task { await endSession(mode: .toggle) }
+            case .listening(let activeMode):
+                stopSession(mode: activeMode)
             case .idle, .error:
-                Task { await beginSession(mode: .toggle) }
-            default:
-                break
+                startSession(mode: .toggle)
+            case .processing, .inserting:
+                cancelCurrentSession()
             }
         }
     }
 
     func cancelCurrentSession() {
+        beginTask?.cancel()
+        beginTask = nil
         audioCaptureService.stop()
         partialTask?.cancel()
         partialTask = nil
         Task { await transcriptionEngine.cancelStreaming() }
+        bubbleViewModel.state = .hidden
+        streamingActive = false
+        resetInsertionState()
+        overlayController.updateAndShow()
         transitionToIdle()
     }
 
+    private func startSession(mode: DictationMode) {
+        beginTask?.cancel()
+        beginTask = Task { [weak self] in
+            await self?.beginSession(mode: mode)
+        }
+    }
+
+    private func stopSession(mode: DictationMode) {
+        beginTask?.cancel()
+        beginTask = nil
+        Task { [weak self] in
+            await self?.endSession(mode: mode)
+        }
+    }
+
     private func beginSession(mode: DictationMode) async {
+        guard mode != .holdToSpeak || holdShortcutIsPressed else {
+            return
+        }
+
         switch state {
         case .idle, .error:
             break
@@ -98,24 +146,58 @@ final class DictationSessionManager: ObservableObject {
         }
 
         do {
+            guard mode != .holdToSpeak || holdShortcutIsPressed else {
+                throw CancellationError()
+            }
+
+            try Task.checkCancellation()
             partialText = ""
             errorMessage = nil
             startedAt = Date()
             currentTargetBundleID = insertionService.focusedApplicationBundleID()
+            isCurrentAppTerminal = isTerminalApp(currentTargetBundleID)
+            resetInsertionState()
 
             state = .listening(mode)
-            bubbleViewModel.mode = mode
-            bubbleViewModel.partialText = "Speak now..."
             bubbleViewModel.state = .listening
             bubbleViewModel.level = 0
             overlayController.updateAndShow()
 
             let modelID = modelManager.defaultModelID
-            try await transcriptionEngine.prepare(modelID: modelID)
+            let modelFolderPath = try await modelManager.ensureModelInstalled(modelID)
+            try Task.checkCancellation()
+            guard mode != .holdToSpeak || holdShortcutIsPressed else {
+                throw CancellationError()
+            }
+
+            do {
+                try await transcriptionEngine.prepare(modelID: modelID, modelFolderPath: modelFolderPath)
+            } catch {
+                // Recover from partially written/corrupted local model artifacts.
+                try await modelManager.reinstall(modelID: modelID)
+                let repairedModelFolderPath = try await modelManager.ensureModelInstalled(modelID)
+                try await transcriptionEngine.prepare(modelID: modelID, modelFolderPath: repairedModelFolderPath)
+            }
+            try Task.checkCancellation()
+            guard mode != .holdToSpeak || holdShortcutIsPressed else {
+                throw CancellationError()
+            }
+
             try await transcriptionEngine.startStreaming()
+            try Task.checkCancellation()
 
             try audioCaptureService.start()
+            streamingActive = true
             startPartialPolling()
+        } catch is CancellationError {
+            if case .listening(let activeMode) = state, activeMode == mode {
+                audioCaptureService.stop()
+                partialTask?.cancel()
+                partialTask = nil
+                await transcriptionEngine.cancelStreaming()
+                streamingActive = false
+                transitionToIdle()
+            }
         } catch {
             state = .error(error.localizedDescription)
             bubbleViewModel.state = .error(error.localizedDescription)
@@ -129,9 +211,17 @@ final class DictationSessionManager: ObservableObject {
             return
         }
 
+        // If streaming never started (for example, hold was released during startup),
+        // cancel silently instead of producing a "No speech detected" error.
+        guard streamingActive else {
+            cancelCurrentSession()
+            return
+        }
+
         audioCaptureService.stop()
         partialTask?.cancel()
         partialTask = nil
+        streamingActive = false
 
         state = .processing
         bubbleViewModel.state = .processing
@@ -140,7 +230,8 @@ final class DictationSessionManager: ObservableObject {
 
         do {
             let transcript = try await transcriptionEngine.finishStreaming()
-            let cleanText = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = sanitizeTranscriptText(transcript.text)
+            let cleanText = cleaned.isEmpty ? "..." : cleaned
 
             guard !cleanText.isEmpty else {
                 throw NSError(domain: "OpenAuris", code: 2, userInfo: [NSLocalizedDescriptionKey: "No speech detected."])
@@ -149,23 +240,26 @@ final class DictationSessionManager: ObservableObject {
             state = .inserting
             overlayController.updateAndShow()
 
-            let insertionResult = await insertionService.insert(cleanText)
-            let insertionMethod: String
+            // Replace whatever we inserted incrementally with the final accurate text.
+            // For terminal apps insertedCharCount is 0 (nothing was inserted during streaming),
+            // so replaceInsertedText simply pastes the final text directly.
+            await replaceInsertedText(with: cleanText)
 
-            switch insertionResult {
-            case .insertedDirectly:
-                insertionMethod = "accessibility"
-            case .insertedViaPasteFallback:
-                insertionMethod = "paste_fallback"
-            case .failed(let reason):
-                throw NSError(domain: "OpenAuris", code: 3, userInfo: [NSLocalizedDescriptionKey: reason])
-            }
+            let insertionMethod: String = "accessibility_realtime"
+
+            let storedTranscript = FinalTranscript(
+                text: cleaned,
+                languageCode: transcript.languageCode,
+                confidence: transcript.confidence,
+                wordCount: cleaned.openAurisWordCount,
+                durationSeconds: transcript.durationSeconds
+            )
 
             if let startedAt {
                 try repository.saveSession(
                     mode: mode,
                     partialPreview: partialText,
-                    transcript: transcript,
+                    transcript: storedTranscript,
                     modelID: modelManager.defaultModelID,
                     startedAt: startedAt,
                     endedAt: Date(),
@@ -176,7 +270,6 @@ final class DictationSessionManager: ObservableObject {
 
             lastTranscript = cleanText
             bubbleViewModel.state = .success
-            bubbleViewModel.partialText = cleanText
             overlayController.updateAndShow()
             dismissBubbleAfterDelay()
 
@@ -215,15 +308,77 @@ final class DictationSessionManager: ObservableObject {
             while !Task.isCancelled {
                 let latest = await self.transcriptionEngine.currentPartialText()
                 await MainActor.run {
-                    self.partialText = latest
+                    let sanitized = sanitizeTranscriptText(latest)
+                    self.partialText = sanitized
+
                     if case .listening = self.state {
-                        self.bubbleViewModel.partialText = latest
-                        self.overlayController.updateAndShow()
+                        // Skip "Listening… Xs" placeholder, duplicates, concurrent inserts,
+                        // terminal apps, and inserts that are too close together.
+                        guard !sanitized.isEmpty,
+                              !sanitized.hasPrefix("Listening…"),
+                              !self.isCurrentAppTerminal,
+                              sanitized != self.lastInsertedText,
+                              !self.isInsertingPartial,
+                              Date().timeIntervalSince(self.lastPartialInsertAt) >= self.minInsertInterval
+                        else { return }
+
+                        self.isInsertingPartial = true
+                        Task {
+                            await self.insertPartialText(sanitized)
+                        }
                     }
                 }
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
         }
+    }
+
+    /// Extension-only partial insertion.
+    ///
+    /// Only appends text when the new partial is a case-insensitive extension of what
+    /// was already inserted. Any re-decode that changes earlier words is silently skipped
+    /// — the final accurate transcript will replace everything at session end.
+    /// This eliminates all backspacing during the live streaming phase.
+    private func insertPartialText(_ newText: String) async {
+        defer { isInsertingPartial = false }
+
+        // Case-insensitive prefix check: handles WhisperKit re-capitalising the first
+        // word of a segment between decodes (e.g. "hello" → "Hello,").
+        guard newText.lowercased().hasPrefix(lastInsertedText.lowercased()) else {
+            return   // Not a clean extension — skip, let the final replace handle it.
+        }
+
+        let delta = String(newText.dropFirst(lastInsertedText.count))
+        guard !delta.isEmpty else { return }
+
+        _ = await insertionService.appendText(delta)
+        lastInsertedText = newText
+        insertedCharCount += delta.count
+        lastPartialInsertAt = Date()
+    }
+
+    private func replaceInsertedText(with newText: String) async {
+        // Delete only what we previously inserted at the cursor.
+        // For terminal apps this is always 0, so the loop is skipped.
+        if insertedCharCount > 0 {
+            for _ in 0..<insertedCharCount {
+                await insertionService.pressBackspace()
+            }
+            insertedCharCount = 0
+        }
+
+        if !newText.isEmpty {
+            _ = await insertionService.appendText(newText)
+        }
+    }
+
+    private func resetInsertionState() {
+        lastInsertedText = ""
+        insertedCharCount = 0
+        isInsertingPartial = false
+        lastPartialInsertAt = .distantPast
+        // isCurrentAppTerminal is intentionally NOT reset here — it is a session-level
+        // flag set in beginSession and must survive past the insertion state reset.
     }
 
     private func transitionToIdle() {

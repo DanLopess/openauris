@@ -131,6 +131,8 @@ final class AppRepository {
         isDefault: Bool,
         installedAt: Date? = nil,
         lastUsedAt: Date? = nil,
+        overwriteInstalledAt: Bool = false,
+        overwriteLastUsedAt: Bool = false,
         checksum: String = ""
     ) throws {
         let existing = try context.fetch(FetchDescriptor<ModelInstallEntity>())
@@ -149,8 +151,16 @@ final class AppRepository {
         target.sizeBytes = sizeBytes
         target.downloadState = state
         target.isDefault = isDefault
-        target.installedAt = installedAt ?? target.installedAt
-        target.lastUsedAt = lastUsedAt ?? target.lastUsedAt
+        if overwriteInstalledAt {
+            target.installedAt = installedAt
+        } else if let installedAt {
+            target.installedAt = installedAt
+        }
+        if overwriteLastUsedAt {
+            target.lastUsedAt = lastUsedAt
+        } else if let lastUsedAt {
+            target.lastUsedAt = lastUsedAt
+        }
         target.checksum = checksum
 
         if existing == nil {

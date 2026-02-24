@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run OpenAuris",
+      "type": "node-terminal",
+      "request": "launch",
+      "preLaunchTask": "Build OpenAuris",
+      "command": "open .build/Build/Products/Debug/openauris.app",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

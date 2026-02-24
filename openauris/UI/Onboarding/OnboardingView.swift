@@ -134,24 +134,45 @@ struct OnboardingView: View {
     }
 
     private var modelSetup: some View {
-        onboardingPage(
+        let defaultModelID = container.modelManager.defaultModelID
+        let isInstalled = container.modelManager.isModelInstalled(defaultModelID)
+        let isDownloading = container.modelManager.isModelDownloading(defaultModelID)
+        let progress = container.modelManager.downloadProgress[defaultModelID]
+        let effectivelyInstalled = isInstalled || (progress ?? 0) >= 1.0
+
+        return onboardingPage(
             title: "Model Auto-Download",
             subtitle: "The default balanced model installs automatically.",
             body: {
                 VStack(alignment: .leading, spacing: 8) {
-                    if container.modelManager.installedModelIDs.contains(container.modelManager.defaultModelID) {
+                    if effectivelyInstalled {
                         Label("Default model is installed", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                    } else if let progress = container.modelManager.downloadProgress[container.modelManager.defaultModelID], progress < 1 {
-                        ProgressView("Downloading...", value: progress)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
+                    } else if isDownloading && !effectivelyInstalled {
+                        if let progress {
+                            ProgressView("Downloading...", value: progress)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text("\(Int(progress * 100))%")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ProgressView("Preparing model...")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    } else if !effectivelyInstalled {
                         Button("Download Default Model") {
                             Task {
                                 await container.modelManager.installDefaultModelIfNeeded()
                             }
                         }
                         .buttonStyle(.borderedProminent)
+                    }
+
+                    if !effectivelyInstalled && !isDownloading {
+                        Text("The app should auto-download this on first launch. If it failed, use the button above to retry.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
