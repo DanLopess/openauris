@@ -1,0 +1,2 @@
+// Release configuration
+MACOSX_DEPLOYMENT_TARGET = 15.0

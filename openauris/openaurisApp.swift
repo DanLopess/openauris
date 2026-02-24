@@ -1,32 +1,25 @@
-//
-//  openaurisApp.swift
-//  openauris
-//
-//  Created by Daniel Lopes on 23.02.2026.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
-struct openaurisApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+struct OpenAurisApp: App {
+    @State private var container = AppContainer()
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra {
+            MenuBarContentView()
+                .environment(container)
+        } label: {
+            MenuBarLabelView()
         }
-        .modelContainer(sharedModelContainer)
+        .menuBarExtraStyle(.menu)
+
+        WindowGroup(id: OpenAurisConstants.dashboardWindowID) {
+            DashboardRootView()
+                .environment(container)
+                .modelContainer(container.modelContainer)
+        }
+        .defaultSize(CGSize(width: 1200, height: 760))
+        .defaultLaunchBehavior(.presented)
     }
 }
