@@ -377,6 +377,10 @@ final class DictationSessionManager {
 
     private func replaceInsertedText(with newText: String) async -> InsertionResult {
         let hadRealtimeInsertions = insertedCharCount > 0
+        let shouldAppend = Self.shouldAppendForFinalInsertion(
+            hadRealtimeInsertions: hadRealtimeInsertions,
+            isCurrentAppTerminal: isCurrentAppTerminal
+        )
 
         // Delete only what we previously inserted at the cursor.
         // For terminal apps this is always 0, so the loop is skipped.
@@ -391,11 +395,18 @@ final class DictationSessionManager {
             return .failed(reason: "Transcript is empty.")
         }
 
-        if hadRealtimeInsertions {
+        if shouldAppend {
             return await insertionService.appendText(newText)
         }
 
         return await insertionService.insert(newText)
+    }
+
+    static func shouldAppendForFinalInsertion(
+        hadRealtimeInsertions: Bool,
+        isCurrentAppTerminal: Bool
+    ) -> Bool {
+        hadRealtimeInsertions || isCurrentAppTerminal
     }
 
     private func resetInsertionState() {
