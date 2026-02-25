@@ -14,7 +14,7 @@ struct OpenAurisApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        WindowGroup(id: OpenAurisConstants.dashboardWindowID) {
+        Window("OpenAuris", id: OpenAurisConstants.dashboardWindowID) {
             DashboardRootView()
                 .environment(container)
                 .modelContainer(container.modelContainer)

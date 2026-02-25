@@ -115,24 +115,44 @@ struct StatsDashboardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Top Target Apps")
                     .font(.headline)
+                    .foregroundStyle(.indigo.gradient)
 
                 if topTargetApps.isEmpty {
                     Text("No app activity in this range.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(topTargetApps.prefix(5), id: \.bundleID) { app in
-                        HStack {
-                            Text(app.bundleID)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                    ForEach(Array(topTargetApps.prefix(5).enumerated()), id: \.element.bundleID) { index, app in
+                        HStack(alignment: .top, spacing: 10) {
+                            Circle()
+                                .fill(accentColor(for: index))
+                                .frame(width: 8, height: 8)
+                                .padding(.top, 5)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.displayName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(accentColor(for: index))
+
+                                if app.bundleID.lowercased() != "unknown" {
+                                    Text(app.bundleID)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                            }
+
                             Spacer()
-                            Text("\(app.sessionCount) sessions")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(app.totalWords) words")
-                                .font(.caption.weight(.semibold))
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("\(app.sessionCount) sessions")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("\(app.totalWords) words")
+                                    .font(.caption.weight(.semibold))
+                            }
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -193,6 +213,19 @@ struct StatsDashboardView: View {
                 return $0.sessionCount > $1.sessionCount
             }
             return $0.totalWords > $1.totalWords
+        }
+    }
+
+    private func accentColor(for rank: Int) -> Color {
+        switch rank {
+        case 0:
+            return .indigo
+        case 1:
+            return .blue
+        case 2:
+            return .teal
+        default:
+            return .cyan
         }
     }
 }

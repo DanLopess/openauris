@@ -5,24 +5,20 @@ struct MenuBarContentView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                AppBrandLogo(size: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("OpenAuris")
-                        .font(.headline)
-                    Text(statusText)
-                        .font(.caption)
-                        .foregroundStyle(statusColor)
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("OpenAuris")
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                Text(statusText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(statusColor)
             }
 
             Divider()
 
             VStack(spacing: 8) {
                 Button("Open Command Center", systemImage: "rectangle.grid.2x2") {
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                    openWindow(id: OpenAurisConstants.dashboardWindowID)
+                    openDashboard()
                 }
                 .buttonStyle(.borderedProminent)
 
@@ -34,48 +30,52 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 6) {
-                statusRow(title: "Microphone", granted: container.permissionManager.microphoneGranted)
-                statusRow(title: "Accessibility", granted: container.permissionManager.accessibilityGranted)
-                statusRow(
-                    title: "Default model",
-                    value: container.modelManager.defaultModelID.capitalized
-                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Permissions")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 2)
+
+                permissionRow(title: "Microphone", granted: container.permissionManager.microphoneGranted)
+                permissionRow(title: "Accessibility", granted: container.permissionManager.accessibilityGranted)
+                valueRow(title: "Default Model", value: container.modelManager.defaultModelID.capitalized)
             }
 
             Divider()
 
-            HStack {
-                Button("Permissions") {
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                    openWindow(id: OpenAurisConstants.dashboardWindowID)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button("Quit OpenAuris", role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                }
-                .buttonStyle(.plain)
+            Button("Quit OpenAuris", role: .destructive) {
+                NSApplication.shared.terminate(nil)
             }
+            .buttonStyle(.plain)
         }
         .padding(12)
-        .frame(width: 280)
     }
 
-    private func statusRow(title: String, granted: Bool) -> some View {
-        statusRow(title: title, value: granted ? "Granted" : "Pending")
+    private func openDashboard() {
+        openWindow(id: OpenAurisConstants.dashboardWindowID)
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
-    private func statusRow(title: String, value: String) -> some View {
-        HStack {
+    private func permissionRow(title: String, granted: Bool) -> some View {
+        infoRow(
+            title: title,
+            value: granted ? "Granted" : "Pending",
+            valueColor: granted ? .green : .orange
+        )
+    }
+
+    private func valueRow(title: String, value: String) -> some View {
+        infoRow(title: title, value: value, valueColor: .secondary)
+    }
+
+    private func infoRow(title: String, value: String, valueColor: Color) -> some View {
+        HStack{
             Text(title)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
-            Spacer()
             Text(value)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(valueColor)
         }
     }
 

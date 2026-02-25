@@ -23,6 +23,37 @@ struct TopTargetAppUsage: Sendable, Identifiable {
     let sessionCount: Int
     let totalWords: Int
     let lastUsedAt: Date
+
+    var displayName: String {
+        Self.displayName(for: bundleID)
+    }
+
+    static func displayName(for bundleID: String) -> String {
+        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.lowercased() != "unknown" else {
+            return "Unknown App"
+        }
+
+        let component = trimmed
+            .split(separator: ".")
+            .last
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? trimmed
+
+        let separated = component.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+        if separated.contains(" ") {
+            return separated
+                .split(whereSeparator: \.isWhitespace)
+                .map { token in token.prefix(1).uppercased() + token.dropFirst().lowercased() }
+                .joined(separator: " ")
+        }
+
+        if component == component.lowercased() {
+            return component.prefix(1).uppercased() + component.dropFirst()
+        }
+
+        return component
+    }
 }
 
 @MainActor
