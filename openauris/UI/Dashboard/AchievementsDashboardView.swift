@@ -4,41 +4,90 @@ struct AchievementsDashboardView: View {
     @Environment(AppContainer.self) private var container
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Achievements")
-                .font(.largeTitle.bold())
+        ScrollView {
+            VStack(alignment: .leading, spacing: DashboardTheme.sectionSpacing) {
+                DashboardSectionHeader(
+                    title: "Milestones",
+                    subtitle: "Track unlocked goals and focus on the next meaningful target."
+                )
 
-            List(container.achievements) { achievement in
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(achievement.title)
-                            .font(.headline)
-                        Text(achievement.subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                if inProgressMilestones.isEmpty && unlockedMilestones.isEmpty {
+                    DashboardEmptyState(
+                        title: "No milestones yet",
+                        subtitle: "Complete your first session to begin milestone tracking.",
+                        systemImage: "rosette"
+                    )
+                } else {
+                    if !inProgressMilestones.isEmpty {
+                        sectionTitle("In Progress")
+                        ForEach(inProgressMilestones) { achievement in
+                            milestoneRow(achievement)
+                        }
                     }
 
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        if let unlockedAt = achievement.unlockedAt {
-                            Text("Unlocked")
-                                .font(.caption)
-                                .foregroundStyle(.green)
-                            Text(unlockedAt, style: .date)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("\(achievement.progressValue)/\(achievement.goalValue)")
-                                .font(.caption)
-                            ProgressView(value: Double(achievement.progressValue), total: Double(achievement.goalValue))
-                                .frame(width: 100)
+                    if !unlockedMilestones.isEmpty {
+                        sectionTitle("Unlocked")
+                        ForEach(unlockedMilestones) { achievement in
+                            milestoneRow(achievement)
                         }
                     }
                 }
-                .padding(.vertical, 2)
             }
-            .listStyle(.inset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DashboardTheme.pagePadding)
+        }
+    }
+
+    private var inProgressMilestones: [AchievementEntity] {
+        container.achievements
+            .filter { $0.unlockedAt == nil }
+            .sorted { $0.progressValue > $1.progressValue }
+    }
+
+    private var unlockedMilestones: [AchievementEntity] {
+        container.achievements
+            .filter { $0.unlockedAt != nil }
+            .sorted { ($0.unlockedAt ?? .distantPast) > ($1.unlockedAt ?? .distantPast) }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(.secondary)
+    }
+
+    private func milestoneRow(_ achievement: AchievementEntity) -> some View {
+        DashboardCard {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(achievement.title)
+                        .font(.headline)
+                    Text(achievement.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if let unlockedAt = achievement.unlockedAt {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        DashboardStatusPill(text: "Unlocked", color: .green)
+                        Text(unlockedAt, format: .dateTime.day().month().year())
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text("\(achievement.progressValue)/\(achievement.goalValue)")
+                            .font(.caption.weight(.semibold))
+                        ProgressView(
+                            value: Double(achievement.progressValue),
+                            total: Double(achievement.goalValue)
+                        )
+                        .frame(width: 130)
+                    }
+                }
+            }
         }
     }
 }

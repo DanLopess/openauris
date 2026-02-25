@@ -54,6 +54,11 @@ final class AppContainer {
         let engine = WhisperKitTranscriptionEngine()
         let insertion = AccessibilityTextInsertionService()
 
+        let streamingEnabled = (try? repository.ensurePreferences())?.realtimeStreamingEnabled ?? false
+        let insertionStrategy: InsertionStrategy = streamingEnabled
+            ? StreamingInsertionStrategy()
+            : BasicInsertionStrategy()
+
         sessionManager = DictationSessionManager(
             audioCaptureService: audioCaptureService,
             transcriptionEngine: engine,
@@ -62,7 +67,8 @@ final class AppContainer {
             modelManager: modelManager,
             permissionManager: permissionManager,
             bubbleViewModel: bubbleViewModel,
-            overlayController: overlayController
+            overlayController: overlayController,
+            insertionStrategy: insertionStrategy
         )
 
         hotkeyManager.onAction = { [weak sessionManager] action in
@@ -107,6 +113,7 @@ final class AppContainer {
             permissionManager.refresh()
 
             await modelManager.installDefaultModelIfNeeded()
+
             refreshDashboardData()
         } catch {
             startupErrorMessage = error.localizedDescription
@@ -179,6 +186,21 @@ final class AppContainer {
         guard let preferences else { return }
 
         preferences.languageOverride = value
+
+        do {
+            try repository.savePreferences(preferences)
+        } catch {
+            startupErrorMessage = error.localizedDescription
+        }
+    }
+
+    func setRealtimeStreaming(_ enabled: Bool) {
+        guard let preferences else { return }
+
+        preferences.realtimeStreamingEnabled = enabled
+        sessionManager.setInsertionStrategy(
+            enabled ? StreamingInsertionStrategy() : BasicInsertionStrategy()
+        )
 
         do {
             try repository.savePreferences(preferences)

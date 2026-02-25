@@ -14,12 +14,14 @@ struct OpenAurisApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        WindowGroup(id: OpenAurisConstants.dashboardWindowID) {
+        Window("OpenAuris", id: OpenAurisConstants.dashboardWindowID) {
             DashboardRootView()
                 .environment(container)
                 .modelContainer(container.modelContainer)
         }
         .defaultSize(CGSize(width: 1200, height: 760))
         .defaultLaunchBehavior(.presented)
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
     }
 }

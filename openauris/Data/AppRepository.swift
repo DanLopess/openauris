@@ -17,6 +17,45 @@ struct AchievementDefinition: Sendable {
     let progressProvider: (UsageSnapshot) -> Int
 }
 
+struct TopTargetAppUsage: Sendable, Identifiable {
+    var id: String { bundleID }
+    let bundleID: String
+    let sessionCount: Int
+    let totalWords: Int
+    let lastUsedAt: Date
+
+    var displayName: String {
+        Self.displayName(for: bundleID)
+    }
+
+    static func displayName(for bundleID: String) -> String {
+        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.lowercased() != "unknown" else {
+            return "Unknown App"
+        }
+
+        let component = trimmed
+            .split(separator: ".")
+            .last
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? trimmed
+
+        let separated = component.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+        if separated.contains(" ") {
+            return separated
+                .split(whereSeparator: \.isWhitespace)
+                .map { token in token.prefix(1).uppercased() + token.dropFirst().lowercased() }
+                .joined(separator: " ")
+        }
+
+        if component == component.lowercased() {
+            return component.prefix(1).uppercased() + component.dropFirst()
+        }
+
+        return component
+    }
+}
+
 @MainActor
 final class AppRepository {
     private static let supportedLanguageOverrides: Set<String> = ["auto", "en", "pt", "es"]
@@ -187,8 +226,75 @@ final class AppRepository {
         try context.fetch(FetchDescriptor<AchievementEntity>(sortBy: [SortDescriptor(\.title)]))
     }
 
-    func fetchDailyStats() throws -> [DailyStatsEntity] {
-        try context.fetch(FetchDescriptor<DailyStatsEntity>(sortBy: [SortDescriptor(\.date)]))
+    func fetchDailyStats(rangeDays: Int? = nil) throws -> [DailyStatsEntity] {
+        let all = try context.fetch(FetchDescriptor<DailyStatsEntity>(sortBy: [SortDescriptor(\.date)]))
+        guard let rangeDays else { return all }
+
+        let normalizedRange = max(1, rangeDays)
+        guard let startDate = calendar.date(byAdding: .day, value: -(normalizedRange - 1), to: calendar.startOfDay(for: Date())) else {
+            return all
+        }
+
+        return all.filter { calendar.startOfDay(for: $0.date) >= startDate }
+    }
+
+    func fetchRecentSessions(limit: Int) throws -> [DictationSessionEntity] {
+        guard limit > 0 else { return [] }
+        let descriptor = FetchDescriptor<DictationSessionEntity>(
+            sortBy: [SortDescriptor(\.endedAt, order: .reverse)]
+        )
+        let all = try context.fetch(descriptor).filter { !$0.isDeleted }
+        return Array(all.prefix(limit))
+    }
+
+    func fetchTopTargetApps(limit: Int, rangeDays: Int) throws -> [TopTargetAppUsage] {
+        guard limit > 0 else { return [] }
+
+        let descriptor = FetchDescriptor<DictationSessionEntity>(
+            sortBy: [SortDescriptor(\.endedAt, order: .reverse)]
+        )
+        let sessions = try context.fetch(descriptor).filter { !$0.isDeleted }
+        let normalizedRange = max(1, rangeDays)
+        let cutoff = calendar.date(
+            byAdding: .day,
+            value: -(normalizedRange - 1),
+            to: calendar.startOfDay(for: Date())
+        ) ?? .distantPast
+
+        let inRange = sessions.filter { calendar.startOfDay(for: $0.endedAt) >= cutoff }
+        var grouped: [String: (count: Int, words: Int, lastUsedAt: Date)] = [:]
+
+        for session in inRange {
+            let bundleID = session.targetBundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolvedBundleID = bundleID.isEmpty ? "unknown" : bundleID
+            var current = grouped[resolvedBundleID] ?? (0, 0, .distantPast)
+            current.count += 1
+            current.words += session.wordCount
+            if session.endedAt > current.lastUsedAt {
+                current.lastUsedAt = session.endedAt
+            }
+            grouped[resolvedBundleID] = current
+        }
+
+        return grouped.map { bundleID, values in
+            TopTargetAppUsage(
+                bundleID: bundleID,
+                sessionCount: values.count,
+                totalWords: values.words,
+                lastUsedAt: values.lastUsedAt
+            )
+        }
+        .sorted {
+            if $0.sessionCount != $1.sessionCount {
+                return $0.sessionCount > $1.sessionCount
+            }
+            if $0.totalWords != $1.totalWords {
+                return $0.totalWords > $1.totalWords
+            }
+            return $0.bundleID < $1.bundleID
+        }
+        .prefix(limit)
+        .map { $0 }
     }
 
     func usageSnapshot() throws -> UsageSnapshot {

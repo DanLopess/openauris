@@ -56,4 +56,16 @@ struct TranscriptSanitizerTests {
     func handlesOnlyTokens() {
         #expect(sanitizeTranscriptText("[BLANK_AUDIO] [INAUDIBLE] <|0.00|>") == "")
     }
+
+    @Test
+    func removesParenthesizedNoiseMarkers() {
+        let raw = "Please continue (paper rustling) with the note."
+        #expect(sanitizeTranscriptText(raw) == "Please continue with the note.")
+    }
+
+    @Test
+    func keepsOrdinaryParentheticalSpeech() {
+        let raw = "Remind me (tomorrow morning) to call Alex."
+        #expect(sanitizeTranscriptText(raw) == "Remind me (tomorrow morning) to call Alex.")
+    }
 }

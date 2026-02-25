@@ -6,6 +6,7 @@ import Foundation
 /// WhisperKit can emit various artefacts that must never reach the user:
 ///   • Bracketed tokens: `[BLANK_AUDIO]`, `[MUSIC]`, `[INAUDIBLE]`, `[NOISE]`,
 ///     `[LAUGHTER]`, `[APPLAUSE]`, `[CROSSTALK]`, `[SILENCE]`, and any future variants.
+///   • Parenthesized non-speech markers: `(paper rustling)`, `(noise)`, `(laughter)`, etc.
 ///   • Timestamp tokens: `<|0.00|>`, `<|transcribe|>`, `<|en|>`, etc.
 ///
 /// All bracketed content is removed — in speech-to-text output every `[…]` expression
@@ -27,14 +28,21 @@ func sanitizeTranscriptText(_ raw: String) -> String {
         options: .regularExpression
     )
 
-    // 3. Remove spaces that were introduced immediately before punctuation marks.
+    // 3. Remove known parenthesized non-speech markers produced by transcription models.
+    cleaned = cleaned.replacingOccurrences(
+        of: #"\(\s*(?:paper\s+rustling|rustling|noise|background\s+noise|music|laughter|laugh(?:ing|s)?|applause|inaudible|crosstalk|silence|cough(?:ing|s)?|sigh(?:ing|s)?)\s*\)"#,
+        with: " ",
+        options: [.regularExpression, .caseInsensitive]
+    )
+
+    // 4. Remove spaces that were introduced immediately before punctuation marks.
     cleaned = cleaned.replacingOccurrences(
         of: #"\s+([.,!?;:…])"#,
         with: "$1",
         options: .regularExpression
     )
 
-    // 4. Collapse remaining runs of whitespace.
+    // 5. Collapse remaining runs of whitespace.
     cleaned = cleaned.replacingOccurrences(
         of: #"\s+"#,
         with: " ",
