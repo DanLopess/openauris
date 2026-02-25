@@ -2,49 +2,35 @@ import SwiftUI
 
 struct DashboardRootView: View {
     @Environment(AppContainer.self) private var container
-    @State private var selectedTab: DashboardTab? = .home
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedTab: DashboardTab = .overview
 
     var body: some View {
-        NavigationSplitView {
-            List(DashboardTab.allCases, selection: $selectedTab) { tab in
-                Label(tab.title, systemImage: tab.systemImage)
-                    .tag(tab)
-                    .font(.system(.body, design: .rounded))
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210)
-            .scrollContentBackground(.hidden)
-            .background(
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.16), Color.cyan.opacity(0.08), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+        DashboardShellView {
+            sidebar
+                .navigationSplitViewColumnWidth(
+                    min: DashboardTheme.sidebarMinWidth,
+                    ideal: DashboardTheme.sidebarIdealWidth,
+                    
                 )
-            )
-        } detail: {
+        } content: {
             detailView
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.02), Color.blue.opacity(0.04), Color.mint.opacity(0.03)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
         }
+        .background(DashboardTheme.windowBackground(colorScheme))
         .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    container.sessionManager.handleHotkeyAction(.toggle)
-                } label: {
-                    Label("Toggle Dictation", systemImage: "waveform.and.mic")
-                }
+            ToolbarItemGroup(placement: .primaryAction) {
+                ControlGroup {
+                    Button("Toggle Dictation", systemImage: "waveform.and.mic") {
+                        container.sessionManager.handleHotkeyAction(.toggle)
+                    }
 
-                Button {
-                    container.refreshDashboardData()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Button("Refresh", systemImage: "arrow.clockwise") {
+                        container.refreshDashboardData()
+                    }
                 }
+                .padding(2)
+                .labelStyle(.iconOnly)
+                .controlSize(.large)
             }
         }
         .sheet(
@@ -65,21 +51,102 @@ struct DashboardRootView: View {
         }
     }
 
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                AppBrandLogo(size: 28)
+                Text("OpenAuris")
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
+            }
+            .padding(.horizontal, 10)
+
+            VStack(spacing: 8) {
+                ForEach(DashboardTab.allCases.filter { $0 != .preferences }) { tab in
+                    sidebarTabButton(tab)
+                }
+            }
+            .padding(8)
+            .dashboardGlassCard()
+
+            Spacer()
+
+            DashboardCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Runtime")
+                        .font(.subheadline.weight(.semibold))
+                    DashboardStatusPill(text: runtimeStatus.label, color: runtimeStatus.color)
+                }
+            }
+
+            VStack(spacing: 8) {
+                sidebarTabButton(.preferences)
+            }
+            .padding(8)
+            .dashboardGlassCard()
+        }
+        .padding(12)
+    }
+
+    private func sidebarTabButton(_ tab: DashboardTab) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = tab
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: tab.systemImage)
+                    .font(.body.weight(.semibold))
+                    .frame(width: 18)
+                Text(tab.title)
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+            .foregroundStyle(selectedTab == tab ? .white : .primary)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        selectedTab == tab
+                        ? DashboardTheme.accentColor(for: tab).opacity(0.9)
+                        : Color.clear
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private var detailView: some View {
-        switch selectedTab ?? .home {
-        case .home:
+        switch selectedTab {
+        case .overview:
             HomeDashboardView()
-        case .history:
+        case .activity:
             HistoryDashboardView()
         case .models:
             ModelsDashboardView()
-        case .stats:
+        case .insights:
             StatsDashboardView()
-        case .achievements:
+        case .milestones:
             AchievementsDashboardView()
-        case .settings:
+        case .preferences:
             SettingsDashboardView()
+        }
+    }
+
+    private var runtimeStatus: (label: String, color: Color) {
+        switch container.sessionManager.state {
+        case .idle:
+            return ("Ready", .green)
+        case .listening:
+            return ("Listening", .cyan)
+        case .processing, .inserting:
+            return ("Busy", .orange)
+        case .error:
+            return ("Needs Attention", .red)
         }
     }
 }

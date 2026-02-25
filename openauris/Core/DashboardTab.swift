@@ -1,34 +1,34 @@
 import Foundation
 
 enum DashboardTab: String, CaseIterable, Identifiable {
-    case home
-    case history
+    case overview
+    case activity
     case models
-    case stats
-    case achievements
-    case settings
+    case insights
+    case milestones
+    case preferences
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .home: return "Home"
-        case .history: return "History"
+        case .overview: return "Overview"
+        case .activity: return "Activity"
         case .models: return "Models"
-        case .stats: return "Stats"
-        case .achievements: return "Achievements"
-        case .settings: return "Settings"
+        case .insights: return "Insights"
+        case .milestones: return "Milestones"
+        case .preferences: return "Preferences"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .home: return "house"
-        case .history: return "clock.arrow.circlepath"
+        case .overview: return "house"
+        case .activity: return "clock.arrow.circlepath"
         case .models: return "square.stack.3d.up"
-        case .stats: return "chart.bar"
-        case .achievements: return "rosette"
-        case .settings: return "gearshape"
+        case .insights: return "chart.bar"
+        case .milestones: return "rosette"
+        case .preferences: return "gearshape"
         }
     }
 }

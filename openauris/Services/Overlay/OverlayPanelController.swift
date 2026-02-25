@@ -3,6 +3,8 @@ import SwiftUI
 
 @MainActor
 final class OverlayPanelController {
+    private static var activePanel: NSPanel?
+
     private let viewModel: BubbleViewModel
     private var panel: NSPanel?
 
@@ -17,13 +19,24 @@ final class OverlayPanelController {
         let panel = panel ?? makePanel()
         self.panel = panel
 
-        guard !panel.isVisible else { return }
+        if let activePanel = Self.activePanel, activePanel !== panel, activePanel.isVisible {
+            activePanel.orderOut(nil)
+        }
+
+        guard !panel.isVisible else {
+            Self.activePanel = panel
+            return
+        }
 
         layout(panel)
         panel.orderFrontRegardless()
+        Self.activePanel = panel
     }
 
     func hide() {
+        if let panel, Self.activePanel === panel {
+            Self.activePanel = nil
+        }
         panel?.orderOut(nil)
     }
 

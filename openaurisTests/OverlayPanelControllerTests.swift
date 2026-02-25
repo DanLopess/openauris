@@ -57,4 +57,37 @@ struct OverlayPanelControllerTests {
 
         #expect(panel.frame.origin == movedOrigin)
     }
+
+    @Test
+    func onlyOneOverlayPanelIsVisibleAcrossControllers() {
+        let firstViewModel = BubbleViewModel()
+        firstViewModel.state = .listening
+        let secondViewModel = BubbleViewModel()
+        secondViewModel.state = .listening
+        let thirdViewModel = BubbleViewModel()
+        thirdViewModel.state = .listening
+
+        let firstController = OverlayPanelController(viewModel: firstViewModel)
+        let secondController = OverlayPanelController(viewModel: secondViewModel)
+        let thirdController = OverlayPanelController(viewModel: thirdViewModel)
+
+        firstController.updateAndShow()
+        secondController.updateAndShow()
+        thirdController.updateAndShow()
+        defer {
+            firstController.hide()
+            secondController.hide()
+            thirdController.hide()
+        }
+
+        let panels = [
+            firstController.debugPanelForTesting,
+            secondController.debugPanelForTesting,
+            thirdController.debugPanelForTesting
+        ]
+        .compactMap { $0 }
+
+        #expect(panels.count == 3)
+        #expect(panels.filter(\.isVisible).count == 1)
+    }
 }

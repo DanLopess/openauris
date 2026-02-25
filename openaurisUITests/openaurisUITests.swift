@@ -14,15 +14,35 @@ final class openaurisUITests: XCTestCase {
     }
 
     @MainActor
-    func testDashboardSmokeRendersCoreSections() throws {
+    func testDashboardSmokeRendersCommandCenterSections() throws {
         let app = XCUIApplication()
         app.launchArguments.append("-openauris-ui-testing")
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["OpenAuris"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["Quick Actions"].exists)
+        XCTAssertTrue(app.staticTexts["Command Center"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["Toggle Dictation"].exists)
-        XCTAssertTrue(app.staticTexts["History"].exists)
-        XCTAssertTrue(app.staticTexts["Settings"].exists)
+        XCTAssertTrue(app.buttons["Overview"].exists)
+        XCTAssertTrue(app.buttons["Activity"].exists)
+        XCTAssertTrue(app.buttons["Models"].exists)
+        XCTAssertTrue(app.buttons["Insights"].exists)
+        XCTAssertTrue(app.buttons["Milestones"].exists)
+        XCTAssertTrue(app.buttons["Preferences"].exists)
+    }
+
+    @MainActor
+    func testSidebarRowIsTappableBeyondLabelText() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("-openauris-ui-testing")
+        app.launch()
+
+        let activityButton = app.buttons["Activity"]
+        XCTAssertTrue(activityButton.waitForExistence(timeout: 8))
+
+        let trailingEdge = activityButton.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        trailingEdge.tap()
+
+        XCTAssertTrue(
+            app.buttons["Clear History"].waitForExistence(timeout: 3)
+        )
     }
 }
