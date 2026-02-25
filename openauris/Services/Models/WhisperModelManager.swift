@@ -10,7 +10,7 @@ struct WhisperModelDescriptor: Identifiable, Sendable {
     let description: String
 
     static let curated: [WhisperModelDescriptor] = [
-        WhisperModelDescriptor(id: "tiny", displayName: "Tiny", estimatedSizeBytes: 150_000_000, description: "Fastest, lower accuracy."),
+        WhisperModelDescriptor(id: "tiny", displayName: "Tiny", estimatedSizeBytes: 150_000_000, description: "Fastest, lower accuracy. Recommended only for English speakers."),
         WhisperModelDescriptor(id: "small", displayName: "Small", estimatedSizeBytes: 500_000_000, description: "Balanced for speed and quality."),
         WhisperModelDescriptor(id: "medium", displayName: "Medium", estimatedSizeBytes: 1_500_000_000, description: "Higher quality, heavier memory usage.")
     ]
