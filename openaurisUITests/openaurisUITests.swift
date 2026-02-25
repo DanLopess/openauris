@@ -19,7 +19,7 @@ final class openaurisUITests: XCTestCase {
         app.launchArguments.append("-openauris-ui-testing")
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Command Center"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["OpenAuris"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["Toggle Dictation"].exists)
         XCTAssertTrue(app.buttons["Overview"].exists)
         XCTAssertTrue(app.buttons["Activity"].exists)
