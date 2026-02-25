@@ -162,6 +162,132 @@ struct AppRepositoryTests {
         #expect(hold != toggle)
     }
 
+    @Test
+    func fetchRecentSessionsReturnsLatestSessionsRespectingLimit() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+
+        let now = Date()
+        try saveSession(
+            in: repository,
+            words: 10,
+            startedAt: now.addingTimeInterval(-300),
+            endedAt: now.addingTimeInterval(-280),
+            bundleID: "com.apple.TextEdit"
+        )
+        try saveSession(
+            in: repository,
+            words: 20,
+            startedAt: now.addingTimeInterval(-200),
+            endedAt: now.addingTimeInterval(-180),
+            bundleID: "com.apple.Terminal"
+        )
+        try saveSession(
+            in: repository,
+            words: 30,
+            startedAt: now.addingTimeInterval(-100),
+            endedAt: now.addingTimeInterval(-80),
+            bundleID: "com.apple.Notes"
+        )
+
+        let recent = try repository.fetchRecentSessions(limit: 2)
+
+        #expect(recent.count == 2)
+        #expect(recent.first?.targetBundleID == "com.apple.Notes")
+        #expect(recent.last?.targetBundleID == "com.apple.Terminal")
+    }
+
+    @Test
+    func fetchDailyStatsRangeDaysExcludesOutOfRangeDays() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let oldDay = calendar.date(byAdding: .day, value: -14, to: today)!
+
+        try saveSession(
+            in: repository,
+            words: 120,
+            startedAt: oldDay,
+            endedAt: oldDay,
+            bundleID: "com.apple.TextEdit"
+        )
+        try saveSession(
+            in: repository,
+            words: 90,
+            startedAt: today,
+            endedAt: today,
+            bundleID: "com.apple.TextEdit"
+        )
+
+        let lastSevenDays = try repository.fetchDailyStats(rangeDays: 7)
+
+        #expect(lastSevenDays.contains(where: { calendar.isDate($0.date, inSameDayAs: today) }))
+        #expect(lastSevenDays.contains(where: { calendar.isDate($0.date, inSameDayAs: oldDay) }) == false)
+    }
+
+    @Test
+    func fetchTopTargetAppsAggregatesSessionsAndWords() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+
+        let now = Date()
+        try saveSession(
+            in: repository,
+            words: 100,
+            startedAt: now.addingTimeInterval(-600),
+            endedAt: now.addingTimeInterval(-580),
+            bundleID: "com.apple.TextEdit"
+        )
+        try saveSession(
+            in: repository,
+            words: 80,
+            startedAt: now.addingTimeInterval(-500),
+            endedAt: now.addingTimeInterval(-480),
+            bundleID: "com.apple.TextEdit"
+        )
+        try saveSession(
+            in: repository,
+            words: 50,
+            startedAt: now.addingTimeInterval(-400),
+            endedAt: now.addingTimeInterval(-380),
+            bundleID: "com.apple.Terminal"
+        )
+
+        let topApps = try repository.fetchTopTargetApps(limit: 2, rangeDays: 30)
+
+        #expect(topApps.count == 2)
+        #expect(topApps.first?.bundleID == "com.apple.TextEdit")
+        #expect(topApps.first?.sessionCount == 2)
+        #expect(topApps.first?.totalWords == 180)
+    }
+
+    private func saveSession(
+        in repository: AppRepository,
+        words: Int,
+        startedAt: Date,
+        endedAt: Date,
+        bundleID: String
+    ) throws {
+        try repository.saveSession(
+            mode: .toggle,
+            partialPreview: "preview",
+            transcript: FinalTranscript(
+                text: String(repeating: "word ", count: words),
+                languageCode: "en",
+                confidence: nil,
+                wordCount: words,
+                durationSeconds: 60
+            ),
+            modelID: "small",
+            startedAt: startedAt,
+            endedAt: endedAt,
+            insertionMethod: "accessibility",
+            targetBundleID: bundleID
+        )
+    }
+
     private func decodedShortcut(from data: Data) -> ShortcutBinding? {
         try? JSONDecoder().decode(ShortcutBinding.self, from: data)
     }

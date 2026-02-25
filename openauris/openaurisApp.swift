@@ -21,5 +21,7 @@ struct OpenAurisApp: App {
         }
         .defaultSize(CGSize(width: 1200, height: 760))
         .defaultLaunchBehavior(.presented)
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
     }
 }

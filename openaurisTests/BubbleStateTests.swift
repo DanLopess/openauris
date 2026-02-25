@@ -20,4 +20,12 @@ struct BubbleStateTests {
         #expect(viewModel.isVisible == false)
         #expect(viewModel.state.ringStyleToken == .hidden)
     }
+
+    @Test
+    func lifecycleStateRingTokensMatchExpectedColors() {
+        #expect(BubbleState.preparing.ringStyleToken == .preparing) // gray while model loads
+        #expect(BubbleState.listening.ringStyleToken == .listening) // gradient while speaking
+        #expect(BubbleState.processing.ringStyleToken == .processing) // blue while processing
+        #expect(BubbleState.success.ringStyleToken == .success) // green when done
+    }
 }
