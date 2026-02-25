@@ -29,6 +29,7 @@ struct StatsDashboardView: View {
                 topApps
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DashboardTheme.pagePadding)
         }
     }
 

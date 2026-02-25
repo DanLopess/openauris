@@ -6,19 +6,21 @@ struct ModelsDashboardView: View {
     @State private var pendingRemoveModelID: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DashboardTheme.sectionSpacing) {
-            DashboardSectionHeader(
-                title: "Models",
-                subtitle: "Manage on-device Whisper models, default selection, and lifecycle state."
-            )
+        ScrollView {
+            VStack(alignment: .leading, spacing: DashboardTheme.sectionSpacing) {
+                DashboardSectionHeader(
+                    title: "Models",
+                    subtitle: "Manage on-device Whisper models, default selection, and lifecycle state."
+                )
 
-            ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(container.modelManager.models) { model in
                         modelCard(for: model)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DashboardTheme.pagePadding)
         }
         .confirmationDialog(
             "Remove this model from local storage?",

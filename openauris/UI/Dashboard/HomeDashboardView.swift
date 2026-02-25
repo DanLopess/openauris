@@ -29,6 +29,7 @@ struct HomeDashboardView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DashboardTheme.pagePadding)
         }
     }
 

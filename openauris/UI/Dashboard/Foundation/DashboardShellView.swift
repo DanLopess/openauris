@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DashboardShellView<Sidebar: View, Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder let sidebar: Sidebar
     @ViewBuilder let content: Content
 
@@ -12,10 +13,15 @@ struct DashboardShellView<Sidebar: View, Content: View>: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-        } detail: {
-            content
-                .padding(DashboardTheme.pagePadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(DashboardTheme.windowBackground(colorScheme))
+        } detail: {
+            ZStack(alignment: .topLeading) {
+                DashboardTheme.windowBackground(colorScheme)
+
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
     }
 }

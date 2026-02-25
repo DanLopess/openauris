@@ -31,22 +31,22 @@ struct HistoryDashboardView: View {
     @State private var showClearConfirmation = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DashboardTheme.sectionSpacing) {
-            DashboardSectionHeader(
-                title: "Activity",
-                subtitle: "Review transcripts with filters and fast follow-up actions."
-            )
-
-            controls
-
-            if filteredSessions.isEmpty {
-                DashboardEmptyState(
-                    title: "No matching transcripts",
-                    subtitle: "Try adjusting filters or run a new dictation session.",
-                    systemImage: "line.3.horizontal.decrease.circle"
+        ScrollView {
+            VStack(alignment: .leading, spacing: DashboardTheme.sectionSpacing) {
+                DashboardSectionHeader(
+                    title: "Activity",
+                    subtitle: "Review transcripts with filters and fast follow-up actions."
                 )
-            } else {
-                ScrollView {
+
+                controls
+
+                if filteredSessions.isEmpty {
+                    DashboardEmptyState(
+                        title: "No matching transcripts",
+                        subtitle: "Try adjusting filters or run a new dictation session.",
+                        systemImage: "line.3.horizontal.decrease.circle"
+                    )
+                } else {
                     LazyVStack(spacing: 12) {
                         ForEach(filteredSessions) { session in
                             activityRow(session)
@@ -54,6 +54,8 @@ struct HistoryDashboardView: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DashboardTheme.pagePadding)
         }
         .confirmationDialog("Delete this transcript?", isPresented: Binding(
             get: { pendingDelete != nil },
