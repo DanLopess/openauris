@@ -45,23 +45,15 @@ final class DictationSessionManager {
     private let bubbleViewModel: BubbleViewModel
     private let overlayController: OverlayPanelController
 
-    private var partialTask: Task<Void, Never>?
+    private var insertionStrategy: InsertionStrategy
     private var beginTask: Task<Void, Never>?
     private var bubbleReadinessGate = BubbleReadinessGate()
     private var streamingActive = false
     private var holdShortcutIsPressed = false
     private var lastToggleActionAt: Date?
     private var startedAt: Date?
-    private var shouldInsertRealtimePartials = false
     private var currentTargetBundleID: String = "unknown"
     private var isCurrentAppTerminal: Bool = false
-
-    // Insertion tracking (normal apps only)
-    private var lastInsertedText: String = ""
-    private var insertedCharCount: Int = 0
-    private var isInsertingPartial = false
-    private var lastPartialInsertAt: Date = .distantPast
-    private let minInsertInterval: TimeInterval = 0.8
 
     init(
         audioCaptureService: AudioCaptureService,
@@ -71,7 +63,8 @@ final class DictationSessionManager {
         modelManager: WhisperModelManager,
         permissionManager: PermissionManager,
         bubbleViewModel: BubbleViewModel,
-        overlayController: OverlayPanelController
+        overlayController: OverlayPanelController,
+        insertionStrategy: InsertionStrategy
     ) {
         self.audioCaptureService = audioCaptureService
         self.transcriptionEngine = transcriptionEngine
@@ -81,8 +74,14 @@ final class DictationSessionManager {
         self.permissionManager = permissionManager
         self.bubbleViewModel = bubbleViewModel
         self.overlayController = overlayController
+        self.insertionStrategy = insertionStrategy
 
         wireAudioCallbacks()
+    }
+
+    func setInsertionStrategy(_ strategy: InsertionStrategy) {
+        guard state == .idle else { return }
+        insertionStrategy = strategy
     }
 
     func handleHotkeyAction(_ action: GlobalHotkeyManager.Action) {
@@ -121,12 +120,10 @@ final class DictationSessionManager {
         beginTask = nil
         bubbleReadinessGate.disarm()
         audioCaptureService.stop()
-        partialTask?.cancel()
-        partialTask = nil
+        insertionStrategy.sessionDidCancel()
         Task { await transcriptionEngine.cancelStreaming() }
         bubbleViewModel.state = .hidden
         streamingActive = false
-        resetInsertionState()
         overlayController.updateAndShow()
         transitionToIdle()
     }
@@ -178,7 +175,6 @@ final class DictationSessionManager {
             startedAt = Date()
             currentTargetBundleID = insertionService.focusedApplicationBundleID()
             isCurrentAppTerminal = isTerminalApp(currentTargetBundleID)
-            resetInsertionState()
 
             state = .listening(mode)
             bubbleViewModel.state = .preparing
@@ -187,7 +183,7 @@ final class DictationSessionManager {
 
             let modelID = modelManager.defaultModelID
             let languageOverride = try repository.ensurePreferences().languageOverride
-            shouldInsertRealtimePartials = RealtimeInsertionPolicy.shouldInsertPartials(
+            let shouldInsertRealtimePartials = RealtimeInsertionPolicy.shouldInsertPartials(
                 languageOverride: languageOverride
             )
             let modelFolderPath = try await modelManager.ensureModelInstalled(modelID)
@@ -223,20 +219,28 @@ final class DictationSessionManager {
             bubbleReadinessGate.armForStreamingStart()
             try audioCaptureService.start()
             streamingActive = true
-            startPartialPolling()
+
+            insertionStrategy.sessionDidStart(
+                engine: transcriptionEngine,
+                insertionService: insertionService,
+                shouldInsertRealtimePartials: shouldInsertRealtimePartials,
+                isCurrentAppTerminal: isCurrentAppTerminal,
+                onPartialText: { [weak self] text in
+                    self?.partialText = text
+                }
+            )
+
             overlayController.updateAndShow()
         } catch is CancellationError {
             if case .listening(let activeMode) = state, activeMode == mode {
                 bubbleReadinessGate.disarm()
                 audioCaptureService.stop()
-                partialTask?.cancel()
-                partialTask = nil
+                insertionStrategy.sessionDidCancel()
                 await transcriptionEngine.cancelStreaming()
                 streamingActive = false
                 transitionToIdle()
             }
         } catch {
-            shouldInsertRealtimePartials = false
             state = .error(error.localizedDescription)
             bubbleViewModel.state = .error(error.localizedDescription)
             overlayController.updateAndShow()
@@ -259,8 +263,6 @@ final class DictationSessionManager {
 
         bubbleReadinessGate.disarm()
         audioCaptureService.stop()
-        partialTask?.cancel()
-        partialTask = nil
         streamingActive = false
 
         state = .processing
@@ -275,12 +277,11 @@ final class DictationSessionManager {
             state = .inserting
             overlayController.updateAndShow()
 
-            let hadRealtimeInsertions = insertedCharCount > 0
-
-            // Replace whatever we inserted incrementally with the final accurate text.
-            // For terminal apps insertedCharCount is 0 (nothing was inserted during streaming),
-            // so replaceInsertedText simply pastes the final text directly.
-            let insertionResult = await replaceInsertedText(with: cleaned)
+            let insertionResult = await insertionStrategy.sessionDidEnd(
+                finalText: cleaned,
+                insertionService: insertionService
+            )
+            let hadRealtimeInsertions = insertionStrategy.hadRealtimeInsertions
             try DictationFinalization.assertInsertionSucceeded(insertionResult)
             let insertionMethod = DictationFinalization.insertionMethod(
                 from: insertionResult,
@@ -343,111 +344,9 @@ final class DictationSessionManager {
         }
     }
 
-    private func startPartialPolling() {
-        partialTask?.cancel()
-        partialTask = Task { [weak self] in
-            guard let self else { return }
-
-            while !Task.isCancelled {
-                let latest = await self.transcriptionEngine.currentPartialText()
-                await MainActor.run {
-                    let sanitized = sanitizeTranscriptText(latest)
-                    self.partialText = sanitized
-
-                    if case .listening = self.state {
-                        // Skip "Listening… Xs" placeholder, duplicates, concurrent inserts,
-                        // terminal apps, and inserts that are too close together.
-                        guard !sanitized.isEmpty,
-                              !sanitized.hasPrefix("Listening…"),
-                              self.shouldInsertRealtimePartials,
-                              !self.isCurrentAppTerminal,
-                              sanitized != self.lastInsertedText,
-                              !self.isInsertingPartial,
-                              Date().timeIntervalSince(self.lastPartialInsertAt) >= self.minInsertInterval
-                        else { return }
-
-                        self.isInsertingPartial = true
-                        Task {
-                            await self.insertPartialText(sanitized)
-                        }
-                    }
-                }
-                try? await Task.sleep(nanoseconds: 150_000_000)
-            }
-        }
-    }
-
-    /// Extension-only partial insertion.
-    ///
-    /// Only appends text when the new partial is a case-insensitive extension of what
-    /// was already inserted. Any re-decode that changes earlier words is silently skipped
-    /// — the final accurate transcript will replace everything at session end.
-    /// This eliminates all backspacing during the live streaming phase.
-    private func insertPartialText(_ newText: String) async {
-        defer { isInsertingPartial = false }
-
-        // Case-insensitive prefix check: handles WhisperKit re-capitalising the first
-        // word of a segment between decodes (e.g. "hello" → "Hello,").
-        guard newText.lowercased().hasPrefix(lastInsertedText.lowercased()) else {
-            return   // Not a clean extension — skip, let the final replace handle it.
-        }
-
-        let delta = String(newText.dropFirst(lastInsertedText.count))
-        guard !delta.isEmpty else { return }
-
-        _ = await insertionService.appendText(delta)
-        lastInsertedText = newText
-        insertedCharCount += delta.count
-        lastPartialInsertAt = Date()
-    }
-
-    private func replaceInsertedText(with newText: String) async -> InsertionResult {
-        let hadRealtimeInsertions = insertedCharCount > 0
-        let shouldAppend = Self.shouldAppendForFinalInsertion(
-            hadRealtimeInsertions: hadRealtimeInsertions,
-            isCurrentAppTerminal: isCurrentAppTerminal
-        )
-
-        // Delete only what we previously inserted at the cursor.
-        // For terminal apps this is always 0, so the loop is skipped.
-        if hadRealtimeInsertions {
-            for _ in 0..<insertedCharCount {
-                await insertionService.pressBackspace()
-            }
-            insertedCharCount = 0
-        }
-
-        guard !newText.isEmpty else {
-            return .failed(reason: "Transcript is empty.")
-        }
-
-        if shouldAppend {
-            return await insertionService.appendText(newText)
-        }
-
-        return await insertionService.insert(newText)
-    }
-
-    static func shouldAppendForFinalInsertion(
-        hadRealtimeInsertions: Bool,
-        isCurrentAppTerminal: Bool
-    ) -> Bool {
-        hadRealtimeInsertions || isCurrentAppTerminal
-    }
-
-    private func resetInsertionState() {
-        lastInsertedText = ""
-        insertedCharCount = 0
-        isInsertingPartial = false
-        lastPartialInsertAt = .distantPast
-        // isCurrentAppTerminal is intentionally NOT reset here — it is a session-level
-        // flag set in beginSession and must survive past the insertion state reset.
-    }
-
     private func transitionToIdle() {
         state = .idle
         startedAt = nil
-        shouldInsertRealtimePartials = false
     }
 
     private func dismissBubbleAfterDelay() {

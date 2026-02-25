@@ -57,6 +57,17 @@ struct SettingsDashboardView: View {
                     Text("Portuguese").tag("pt")
                     Text("Spanish").tag("es")
                 }
+
+                Divider()
+
+                Toggle("Real-time streaming insertion", isOn: Binding(
+                    get: { preferences.realtimeStreamingEnabled },
+                    set: { container.setRealtimeStreaming($0) }
+                ))
+
+                Text("When enabled, text is inserted as you speak. When disabled, text is inserted only after you stop speaking.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

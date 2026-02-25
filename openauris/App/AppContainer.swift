@@ -15,6 +15,7 @@ final class AppContainer {
     let modelManager: WhisperModelManager
     let sessionManager: DictationSessionManager
     let hotkeyManager: GlobalHotkeyManager
+    let transcriptionEngine: any TranscriptionEngine
 
     var preferences: UserPreferenceEntity?
     var sessions: [DictationSessionEntity] = []
@@ -53,6 +54,12 @@ final class AppContainer {
         let audioCaptureService = AudioCaptureService()
         let engine = WhisperKitTranscriptionEngine()
         let insertion = AccessibilityTextInsertionService()
+        transcriptionEngine = engine
+
+        let streamingEnabled = (try? repository.ensurePreferences())?.realtimeStreamingEnabled ?? false
+        let insertionStrategy: InsertionStrategy = streamingEnabled
+            ? StreamingInsertionStrategy()
+            : BasicInsertionStrategy()
 
         sessionManager = DictationSessionManager(
             audioCaptureService: audioCaptureService,
@@ -62,7 +69,8 @@ final class AppContainer {
             modelManager: modelManager,
             permissionManager: permissionManager,
             bubbleViewModel: bubbleViewModel,
-            overlayController: overlayController
+            overlayController: overlayController,
+            insertionStrategy: insertionStrategy
         )
 
         hotkeyManager.onAction = { [weak sessionManager] action in
@@ -107,6 +115,17 @@ final class AppContainer {
             permissionManager.refresh()
 
             await modelManager.installDefaultModelIfNeeded()
+
+            // Preload WhisperKit so first dictation has no cold-start delay.
+            let modelID = modelManager.defaultModelID
+            if let modelPath = modelManager.modelFolderPathIfAvailable(modelID) {
+                try? await transcriptionEngine.prepare(
+                    modelID: modelID,
+                    modelFolderPath: modelPath,
+                    languageOverride: prefs.languageOverride
+                )
+            }
+
             refreshDashboardData()
         } catch {
             startupErrorMessage = error.localizedDescription
@@ -179,6 +198,21 @@ final class AppContainer {
         guard let preferences else { return }
 
         preferences.languageOverride = value
+
+        do {
+            try repository.savePreferences(preferences)
+        } catch {
+            startupErrorMessage = error.localizedDescription
+        }
+    }
+
+    func setRealtimeStreaming(_ enabled: Bool) {
+        guard let preferences else { return }
+
+        preferences.realtimeStreamingEnabled = enabled
+        sessionManager.setInsertionStrategy(
+            enabled ? StreamingInsertionStrategy() : BasicInsertionStrategy()
+        )
 
         do {
             try repository.savePreferences(preferences)

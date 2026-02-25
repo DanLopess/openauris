@@ -13,6 +13,7 @@ final class UserPreferenceEntity {
     var insertionPrefersAccessibility: Bool
     var onboardingCompleted: Bool
     var hasOpenedDashboardOnce: Bool?
+    var realtimeStreamingEnabled: Bool = false
 
     init(
         id: String = "default",
@@ -24,7 +25,8 @@ final class UserPreferenceEntity {
         launchAtLogin: Bool,
         insertionPrefersAccessibility: Bool,
         onboardingCompleted: Bool,
-        hasOpenedDashboardOnce: Bool?
+        hasOpenedDashboardOnce: Bool?,
+        realtimeStreamingEnabled: Bool = false
     ) {
         self.id = id
         self.holdShortcutData = holdShortcutData
@@ -36,5 +38,6 @@ final class UserPreferenceEntity {
         self.insertionPrefersAccessibility = insertionPrefersAccessibility
         self.onboardingCompleted = onboardingCompleted
         self.hasOpenedDashboardOnce = hasOpenedDashboardOnce
+        self.realtimeStreamingEnabled = realtimeStreamingEnabled
     }
 }

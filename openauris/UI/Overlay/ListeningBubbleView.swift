@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ListeningBubbleView: View {
     var viewModel: BubbleViewModel
-    var onDrag: ((CGSize, Bool) -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -19,17 +18,12 @@ struct ListeningBubbleView: View {
 
             AppBrandLogo(size: 16)
         }
+        .background(.clear)
         .frame(width: 56, height: 56)
         .clipShape(Circle())
         .overlay(
             Circle()
                 .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 6)
-        .gesture(
-            DragGesture()
-                .onChanged { value in onDrag?(value.translation, false) }
-                .onEnded   { value in onDrag?(value.translation, true)  }
         )
     }
 
