@@ -218,6 +218,7 @@ final class DictationSessionManager {
 
             bubbleReadinessGate.armForStreamingStart()
             try audioCaptureService.start()
+            bubbleViewModel.state = .listening
             streamingActive = true
 
             insertionStrategy.sessionDidStart(

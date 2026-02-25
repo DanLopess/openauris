@@ -15,7 +15,6 @@ final class AppContainer {
     let modelManager: WhisperModelManager
     let sessionManager: DictationSessionManager
     let hotkeyManager: GlobalHotkeyManager
-    let transcriptionEngine: any TranscriptionEngine
 
     var preferences: UserPreferenceEntity?
     var sessions: [DictationSessionEntity] = []
@@ -54,7 +53,6 @@ final class AppContainer {
         let audioCaptureService = AudioCaptureService()
         let engine = WhisperKitTranscriptionEngine()
         let insertion = AccessibilityTextInsertionService()
-        transcriptionEngine = engine
 
         let streamingEnabled = (try? repository.ensurePreferences())?.realtimeStreamingEnabled ?? false
         let insertionStrategy: InsertionStrategy = streamingEnabled
@@ -115,16 +113,6 @@ final class AppContainer {
             permissionManager.refresh()
 
             await modelManager.installDefaultModelIfNeeded()
-
-            // Preload WhisperKit so first dictation has no cold-start delay.
-            let modelID = modelManager.defaultModelID
-            if let modelPath = modelManager.modelFolderPathIfAvailable(modelID) {
-                try? await transcriptionEngine.prepare(
-                    modelID: modelID,
-                    modelFolderPath: modelPath,
-                    languageOverride: prefs.languageOverride
-                )
-            }
 
             refreshDashboardData()
         } catch {
