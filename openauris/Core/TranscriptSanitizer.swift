@@ -30,7 +30,7 @@ func sanitizeTranscriptText(_ raw: String) -> String {
 
     // 3. Remove known parenthesized non-speech markers produced by transcription models.
     cleaned = cleaned.replacingOccurrences(
-        of: #"\(\s*(?:paper\s+rustling|rustling|noise|background\s+noise|music|laughter|laugh(?:ing|s)?|applause|inaudible|crosstalk|silence|cough(?:ing|s)?|sigh(?:ing|s)?)\s*\)"#,
+        of: #"\(\s*(?:paper\s+rustling|rustling|noise|background\s+noise|music|laughter|laugh(?:ing|s)?|applause|inaudible|crosstalk|silence|cough(?:ing|s)?|sigh(?:ing|s)?|typing(?:\s+noise|\s+sounds?)?)\s*\)"#,
         with: " ",
         options: [.regularExpression, .caseInsensitive]
     )

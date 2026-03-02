@@ -263,12 +263,116 @@ struct AppRepositoryTests {
         #expect(topApps.first?.totalWords == 180)
     }
 
+    @Test
+    func milestoneCatalogPreservesLegacyIDsAndExpandedCount() {
+        let definitions = MilestoneCatalog.definitions
+        let ids = Set(definitions.map(\.id))
+        let legacyIDs = [
+            "first_session",
+            "words_1000",
+            "streak_7",
+            "sessions_25",
+            "words_10000"
+        ]
+
+        #expect(definitions.count == 14)
+        #expect(ids.count == definitions.count)
+
+        for id in legacyIDs {
+            #expect(ids.contains(id))
+        }
+    }
+
+    @Test
+    func speakingTimeMilestonesUseFlooredMinuteProgressAndUnlock() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+        let now = Date()
+
+        try saveSession(
+            in: repository,
+            words: 200,
+            startedAt: now.addingTimeInterval(-601),
+            endedAt: now,
+            bundleID: "com.apple.TextEdit",
+            durationSeconds: 601
+        )
+
+        let achievements = try repository.fetchAchievements()
+        let tenMinute = try #require(achievements.first { $0.id == "speaking_10m" })
+
+        #expect(tenMinute.progressValue == 10)
+        #expect(tenMinute.goalValue == 10)
+        #expect(tenMinute.unlockedAt != nil)
+    }
+
+    @Test
+    func syncMilestonesCatalogBackfillsForExistingSessionHistory() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+        let now = Date()
+        let duration = 11 * 60.0
+        let words = 1_200
+
+        let session = DictationSessionEntity(
+            startedAt: now.addingTimeInterval(-duration),
+            endedAt: now,
+            modeRawValue: DictationMode.toggle.rawValue,
+            partialPreview: "preview",
+            finalText: String(repeating: "word ", count: words),
+            languageCode: "en",
+            modelID: "small",
+            audioDurationSec: duration,
+            wordCount: words,
+            wpm: (Double(words) / duration) * 60,
+            insertionMethod: "accessibility",
+            targetBundleID: "com.apple.TextEdit"
+        )
+        container.mainContext.insert(session)
+        try container.mainContext.save()
+
+        #expect(try repository.fetchAchievements().isEmpty)
+
+        try repository.syncMilestonesCatalog()
+
+        let achievements = try repository.fetchAchievements()
+        #expect(achievements.count == 14)
+        #expect(achievements.contains { $0.id == "words_1000" && $0.unlockedAt != nil })
+        #expect(achievements.contains { $0.id == "speaking_10m" && $0.unlockedAt != nil })
+    }
+
+    @Test
+    func syncMilestonesCatalogDoesNotResetExistingUnlockTimestamp() throws {
+        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let repository = AppRepository(context: container.mainContext)
+        let now = Date()
+
+        try saveSession(
+            in: repository,
+            words: 120,
+            startedAt: now.addingTimeInterval(-90),
+            endedAt: now,
+            bundleID: "com.apple.TextEdit"
+        )
+
+        let initial = try repository.fetchAchievements()
+        let unlockedAt = try #require(initial.first { $0.id == "first_session" }?.unlockedAt)
+
+        try repository.syncMilestonesCatalog()
+
+        let refreshed = try repository.fetchAchievements()
+        let unlockedAfterSync = try #require(refreshed.first { $0.id == "first_session" }?.unlockedAt)
+
+        #expect(unlockedAfterSync == unlockedAt)
+    }
+
     private func saveSession(
         in repository: AppRepository,
         words: Int,
         startedAt: Date,
         endedAt: Date,
-        bundleID: String
+        bundleID: String,
+        durationSeconds: Double = 60
     ) throws {
         try repository.saveSession(
             mode: .toggle,
@@ -278,7 +382,7 @@ struct AppRepositoryTests {
                 languageCode: "en",
                 confidence: nil,
                 wordCount: words,
-                durationSeconds: 60
+                durationSeconds: durationSeconds
             ),
             modelID: "small",
             startedAt: startedAt,

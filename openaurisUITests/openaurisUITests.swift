@@ -27,6 +27,12 @@ final class openaurisUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Insights"].exists)
         XCTAssertTrue(app.buttons["Milestones"].exists)
         XCTAssertTrue(app.buttons["Preferences"].exists)
+
+        app.buttons["Milestones"].tap()
+        XCTAssertTrue(app.staticTexts["Sessions"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Words"].exists)
+        XCTAssertTrue(app.staticTexts["Streak"].exists)
+        XCTAssertTrue(app.staticTexts["Speaking Time"].exists)
     }
 
     @MainActor

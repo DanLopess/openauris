@@ -113,6 +113,7 @@ final class AppContainer {
             permissionManager.refresh()
 
             await modelManager.installDefaultModelIfNeeded()
+            try repository.syncMilestonesCatalog()
 
             refreshDashboardData()
         } catch {

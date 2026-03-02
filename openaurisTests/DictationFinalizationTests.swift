@@ -16,6 +16,12 @@ struct DictationFinalizationTests {
     }
 
     @Test
+    func cleanedFinalTextRemovesTypingMarker() throws {
+        let text = try DictationFinalization.cleanedFinalText(from: "Hello (typing) world.")
+        #expect(text == "Hello world.")
+    }
+
+    @Test
     func insertionFailureThrowsMeaningfulError() {
         #expect(throws: DictationFinalizationError.insertionFailed("Pasteboard unavailable")) {
             try DictationFinalization.assertInsertionSucceeded(.failed(reason: "Pasteboard unavailable"))
