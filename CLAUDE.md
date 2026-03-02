@@ -81,3 +81,4 @@ SwiftData entities via `AppRepository` (main context only, all calls `@MainActor
 - Keep transcription local-only — no network calls for audio/text.
 - Prefer Apple-native frameworks; minimise third-party dependencies.
 - Preserve menu bar-first UX and low-latency dictation behaviour.
+- **A task is not complete until the project builds successfully and all tests pass.** Always run the build command after making changes before declaring work done.

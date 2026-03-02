@@ -95,14 +95,14 @@ struct StatsDashboardView: View {
                             x: .value("Day", day.date),
                             y: .value("Value", metricValue(for: day))
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         .foregroundStyle(.cyan)
 
                         AreaMark(
                             x: .value("Day", day.date),
                             y: .value("Value", metricValue(for: day))
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         .foregroundStyle(.cyan.opacity(0.18))
                     }
                     .frame(height: 220)
