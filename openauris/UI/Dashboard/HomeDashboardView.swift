@@ -11,7 +11,6 @@ struct HomeDashboardView: View {
                     subtitle: "Operational overview for dictation status, readiness, and recent activity."
                 )
 
-                statusRow
                 metricsGrid
                 quickActions
                 recentActivity
@@ -33,42 +32,6 @@ struct HomeDashboardView: View {
         }
     }
 
-    private var statusRow: some View {
-        HStack(alignment: .top, spacing: 14) {
-            DashboardCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Runtime Status")
-                        .font(.headline)
-                    DashboardStatusPill(text: runtimeStatus.label, color: runtimeStatus.color)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-
-            DashboardCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Permissions")
-                        .font(.headline)
-                    statusLine("Microphone", ok: container.permissionManager.microphoneGranted)
-                    statusLine("Accessibility", ok: container.permissionManager.accessibilityGranted)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-
-            DashboardCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Active Model")
-                        .font(.headline)
-                    Text(container.modelManager.defaultModelID.capitalized)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                    Text(container.modelManager.isModelInstalled(container.modelManager.defaultModelID) ? "Installed and ready." : "Waiting for install.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-        }
-    }
-
     private var metricsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
             DashboardMetricCard(
@@ -78,9 +41,9 @@ struct HomeDashboardView: View {
                 accent: .cyan
             )
             DashboardMetricCard(
-                title: "Sessions",
-                value: "\(container.usageSnapshot.totalSessions)",
-                caption: "Completed",
+                title: "Minutes Spoken",
+                value: "\(container.usageSnapshot.totalSpokenMinutes)",
+                caption: "Total minutes spoken",
                 accent: .blue
             )
             DashboardMetricCard(
@@ -157,30 +120,4 @@ struct HomeDashboardView: View {
         }
     }
 
-    private func statusLine(_ title: String, ok: Bool) -> some View {
-        HStack {
-            Circle()
-                .fill(ok ? .green : .orange)
-                .frame(width: 8, height: 8)
-            Text(title)
-                .font(.subheadline)
-            Spacer()
-            Text(ok ? "Granted" : "Pending")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var runtimeStatus: (label: String, color: Color) {
-        switch container.sessionManager.state {
-        case .idle:
-            return ("Ready", .green)
-        case .listening:
-            return ("Listening", .cyan)
-        case .processing, .inserting:
-            return ("Busy", .orange)
-        case .error:
-            return ("Error", .red)
-        }
-    }
 }

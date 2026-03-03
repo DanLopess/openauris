@@ -7,6 +7,10 @@ struct UsageSnapshot: Sendable {
     let totalSpeakingSeconds: Double
     let averageWPM: Double
     let currentStreakDays: Int
+
+    var totalSpokenMinutes: Int {
+        Int(totalSpeakingSeconds / 60)
+    }
 }
 
 struct TopTargetAppUsage: Sendable, Identifiable {

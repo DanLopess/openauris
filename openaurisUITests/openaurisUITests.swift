@@ -51,4 +51,30 @@ final class openaurisUITests: XCTestCase {
             app.buttons["Clear History"].waitForExistence(timeout: 3)
         )
     }
+
+    @MainActor
+    func testOverviewMovesRuntimeDetailsOutOfOverviewCards() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("-openauris-ui-testing")
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Overview"].waitForExistence(timeout: 8))
+        app.buttons["Overview"].tap()
+
+        XCTAssertTrue(app.staticTexts["Runtime Status"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Permissions"].exists)
+    }
+
+    @MainActor
+    func testOverviewShowsMinutesSpokenInsteadOfSessionsMetric() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("-openauris-ui-testing")
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Overview"].waitForExistence(timeout: 8))
+        app.buttons["Overview"].tap()
+
+        XCTAssertTrue(app.staticTexts["Minutes Spoken"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Sessions"].exists)
+    }
 }

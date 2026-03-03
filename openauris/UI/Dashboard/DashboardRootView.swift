@@ -72,9 +72,22 @@ struct DashboardRootView: View {
 
             DashboardCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Runtime")
+                    Text("Runtime Status")
                         .font(.subheadline.weight(.semibold))
                     DashboardStatusPill(text: runtimeStatus.label, color: runtimeStatus.color)
+                    Divider()
+                    Text("Active Model")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(container.modelManager.defaultModelID.capitalized)
+                        .font(.system(.body, design: .rounded).weight(.semibold))
+                    Text(
+                        container.modelManager.isModelInstalled(container.modelManager.defaultModelID)
+                        ? "Installed and ready."
+                        : "Waiting for install."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 }
             }
 
