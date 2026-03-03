@@ -23,5 +23,8 @@ struct OpenAurisApp: App {
         .defaultLaunchBehavior(.presented)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
+        .commands {
+            DashboardCommands()
+        }
     }
 }

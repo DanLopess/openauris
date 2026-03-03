@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct DashboardRootView: View {
     @Environment(AppContainer.self) private var container
@@ -45,6 +46,18 @@ struct DashboardRootView: View {
         .task {
             container.bootstrapIfNeeded()
             container.refreshDashboardData()
+        }
+        .onAppear {
+            NSApplication.shared.setActivationPolicy(.regular)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+        .onDisappear {
+            NSApplication.shared.setActivationPolicy(.accessory)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openAurisOpenSettings)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = .preferences
+            }
         }
         .onChange(of: container.sessionManager.state) { _, _ in
             container.refreshDashboardData()

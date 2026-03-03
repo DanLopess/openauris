@@ -16,14 +16,14 @@
 			containerPortal = DDA458622F4CE33D005A1758 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = DDA458692F4CE33D005A1758;
-			remoteInfo = openauris;
+			remoteInfo = OpenAuris;
 		};
 		DDA458842F4CE33E005A1758 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DDA458622F4CE33D005A1758 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = DDA458692F4CE33D005A1758;
-			remoteInfo = openauris;
+			remoteInfo = OpenAuris;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -115,11 +115,11 @@
 			fileSystemSynchronizedGroups = (
 				DDA4586C2F4CE33D005A1758 /* openauris */,
 			);
-			name = openauris;
+			name = OpenAuris;
 			packageProductDependencies = (
 				A1B2C3D52F4D0001005A1758 /* WhisperKit */,
 			);
-			productName = openauris;
+			productName = OpenAuris;
 			productReference = DDA4586A2F4CE33D005A1758 /* openauris.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -139,10 +139,10 @@
 			fileSystemSynchronizedGroups = (
 				DDA4587C2F4CE33E005A1758 /* openaurisTests */,
 			);
-			name = openaurisTests;
+			name = OpenAurisTests;
 			packageProductDependencies = (
 			);
-			productName = openaurisTests;
+			productName = OpenAurisTests;
 			productReference = DDA458792F4CE33E005A1758 /* openaurisTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -162,10 +162,10 @@
 			fileSystemSynchronizedGroups = (
 				DDA458862F4CE33E005A1758 /* openaurisUITests */,
 			);
-			name = openaurisUITests;
+			name = OpenAurisUITests;
 			packageProductDependencies = (
 			);
-			productName = openaurisUITests;
+			productName = OpenAurisUITests;
 			productReference = DDA458832F4CE33E005A1758 /* openaurisUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
@@ -414,6 +414,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenAuris;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenAuris needs microphone access to transcribe speech locally on your Mac.";
@@ -450,6 +452,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenAuris;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenAuris needs microphone access to transcribe speech locally on your Mac.";
@@ -527,7 +531,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = openauris;
+				TEST_TARGET_NAME = OpenAuris;
 			};
 			name = Debug;
 		};
@@ -546,7 +550,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = openauris;
+				TEST_TARGET_NAME = OpenAuris;
 			};
 			name = Release;
 		};

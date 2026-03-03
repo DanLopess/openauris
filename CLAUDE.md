@@ -12,29 +12,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Build:**
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
+xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
 ```
 
 **Run app (terminal):**
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
-open .build/Build/Products/Debug/openauris.app
+xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
+open .build/Build/Products/Debug/OpenAuris.app
 ```
 
 **Run all unit tests:**
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisTests test
+xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:OpenAurisTests test
 ```
 
 **Run a single test class:**
 ```bash
-xcodebuild -project openauris.xcodeproj -scheme openauris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:openaurisTests/AppRepositoryTests test
+xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:OpenAurisTests/AppRepositoryTests test
 ```
 
 **VS Code tasks:**
 - `Build OpenAuris`: build Debug to `.build`
-- `Run OpenAuris`: depends on build, then `open .build/Build/Products/Debug/openauris.app`
-- `Run Tests`: test target `openaurisTests` with `.build` derived data
+- `Run OpenAuris`: depends on build, then `open .build/Build/Products/Debug/OpenAuris.app`
+- `Run Tests`: test target `OpenAurisTests` with `.build` derived data
 
 `xcodebuild ... run` is not a valid build action in this setup.
 
