@@ -211,7 +211,7 @@ struct OnboardingView: View {
             body: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Hold to speak: ⌃⌥Space")
-                    Text("Toggle start/stop: ⌃⌥Return")
+                    Text("Toggle start/stop: ⌃⇧↩")
                 }
                 .font(.body.monospaced())
             }
@@ -242,9 +242,11 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
 
             body()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
         }
         .padding(8)
+        .frame(minWidth: 400)
     }
 }

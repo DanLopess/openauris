@@ -180,7 +180,14 @@ private struct ShortcutRecorder: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .frame(minWidth: 220, alignment: .leading)
-                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(
+                        workingShortcut != current ? Color.yellow.opacity(0.2) : Color.white.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(workingShortcut != current ? Color.yellow : Color.clear, lineWidth: 2)
+                    )
 
                 Button(isRecording ? "Press keys..." : "Record Shortcut") {
                     if isRecording {
@@ -200,18 +207,21 @@ private struct ShortcutRecorder: View {
                     onSave(workingShortcut)
                 }
                 .buttonStyle(.bordered)
+                .disabled(workingShortcut == current)
 
                 Button("Reset") {
                     workingShortcut = current
                     hint = nil
                 }
                 .buttonStyle(.bordered)
+                .disabled(workingShortcut == current)
 
                 Button("Use Default") {
                     workingShortcut = defaultShortcut
                     hint = nil
                 }
                 .buttonStyle(.bordered)
+                .disabled(workingShortcut == defaultShortcut)
             }
 
             if let hint {

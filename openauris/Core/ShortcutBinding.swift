@@ -16,7 +16,7 @@ struct ShortcutBinding: Codable, Equatable, Sendable {
 
     static let defaultToggle = ShortcutBinding(
         keyCode: 36,
-        modifiersRawValue: (NSEvent.ModifierFlags.control.union(.option)).rawValue
+        modifiersRawValue: (NSEvent.ModifierFlags.control.union(.shift)).rawValue
     )
 
     var readable: String {
