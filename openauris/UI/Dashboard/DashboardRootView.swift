@@ -49,6 +49,13 @@ struct DashboardRootView: View {
         .onChange(of: container.sessionManager.state) { _, _ in
             container.refreshDashboardData()
         }
+        .onChange(of: container.requestedDashboardTab) { _, tab in
+            guard let tab else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = tab
+            }
+            container.requestedDashboardTab = nil
+        }
     }
 
     private var sidebar: some View {

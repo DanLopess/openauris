@@ -34,6 +34,7 @@ final class AppContainer {
     }
     var showOnboarding = false
     var startupErrorMessage: String?
+    var requestedDashboardTab: DashboardTab? = nil
     
     // Runtime status tracking
     enum RuntimeStatus: Equatable {

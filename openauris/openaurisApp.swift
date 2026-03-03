@@ -12,7 +12,7 @@ struct OpenAurisApp: App {
         } label: {
             MenuBarLabelView()
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
 
         Window("OpenAuris", id: OpenAurisConstants.dashboardWindowID) {
             DashboardRootView()
