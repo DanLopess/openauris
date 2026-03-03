@@ -151,15 +151,13 @@ struct DashboardRootView: View {
     }
 
     private var runtimeStatus: (label: String, color: Color) {
-        switch container.sessionManager.state {
-        case .idle:
+        switch container.runtimeStatus {
+        case .preparing:
+            return ("Preparing…", .orange)
+        case .ready:
             return ("Ready", .green)
-        case .listening:
-            return ("Listening", .cyan)
-        case .processing, .inserting:
-            return ("Busy", .orange)
-        case .error:
-            return ("Needs Attention", .red)
+        case .error(let message):
+            return ("Error: " + message, .red)
         }
     }
 }

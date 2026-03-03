@@ -44,6 +44,7 @@ final class DictationSessionManager {
     private let permissionManager: PermissionManager
     private let bubbleViewModel: BubbleViewModel
     private let overlayController: OverlayPanelController
+    private var onModelError: (String) -> Void = { _ in }
 
     private var insertionStrategy: InsertionStrategy
     private var beginTask: Task<Void, Never>?
@@ -64,7 +65,8 @@ final class DictationSessionManager {
         permissionManager: PermissionManager,
         bubbleViewModel: BubbleViewModel,
         overlayController: OverlayPanelController,
-        insertionStrategy: InsertionStrategy
+        insertionStrategy: InsertionStrategy,
+        onModelError: @escaping (String) -> Void = { _ in }
     ) {
         self.audioCaptureService = audioCaptureService
         self.transcriptionEngine = transcriptionEngine
@@ -75,8 +77,13 @@ final class DictationSessionManager {
         self.bubbleViewModel = bubbleViewModel
         self.overlayController = overlayController
         self.insertionStrategy = insertionStrategy
+        self.onModelError = onModelError
 
         wireAudioCallbacks()
+    }
+    
+    func setModelErrorHandler(_ handler: @escaping (String) -> Void) {
+        onModelError = handler
     }
 
     func setInsertionStrategy(_ strategy: InsertionStrategy) {
@@ -202,11 +209,17 @@ final class DictationSessionManager {
                 // Recover from partially written/corrupted local model artifacts.
                 try await modelManager.reinstall(modelID: modelID)
                 let repairedModelFolderPath = try await modelManager.ensureModelInstalled(modelID)
-                try await transcriptionEngine.prepare(
-                    modelID: modelID,
-                    modelFolderPath: repairedModelFolderPath,
-                    languageOverride: languageOverride
-                )
+                do {
+                    try await transcriptionEngine.prepare(
+                        modelID: modelID,
+                        modelFolderPath: repairedModelFolderPath,
+                        languageOverride: languageOverride
+                    )
+                } catch {
+                    // If recovery fails, this is a genuine model error
+                    onModelError(error.localizedDescription)
+                    throw error
+                }
             }
             try Task.checkCancellation()
             guard mode != .holdToSpeak || holdShortcutIsPressed else {

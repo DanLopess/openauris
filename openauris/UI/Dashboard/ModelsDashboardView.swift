@@ -88,7 +88,9 @@ struct ModelsDashboardView: View {
                             .foregroundStyle(.secondary)
                     } else if isInstalled {
                         Button("Make Default") {
-                            container.makeDefaultModel(model.id)
+                            Task {
+                                await container.makeDefaultModel(model.id)
+                            }
                         }
                         .buttonStyle(.bordered)
                         .disabled(isDefault)

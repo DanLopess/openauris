@@ -34,6 +34,15 @@ final class AppContainer {
     }
     var showOnboarding = false
     var startupErrorMessage: String?
+    
+    // Runtime status tracking
+    enum RuntimeStatus: Equatable {
+        case preparing
+        case ready
+        case error(String)
+    }
+    
+    var runtimeStatus: RuntimeStatus = .preparing
 
     private var didBootstrap = false
     private let isUITesting = ProcessInfo.processInfo.arguments.contains("-openauris-ui-testing")
@@ -70,6 +79,11 @@ final class AppContainer {
             overlayController: overlayController,
             insertionStrategy: insertionStrategy
         )
+        
+        // Set up model error callback after sessionManager is fully initialized
+        sessionManager.setModelErrorHandler { [weak self] error in
+            self?.runtimeStatus = .error(error)
+        }
 
         hotkeyManager.onAction = { [weak sessionManager] action in
             sessionManager?.handleHotkeyAction(action)
@@ -112,7 +126,13 @@ final class AppContainer {
 
             permissionManager.refresh()
 
+            // Set preparing status while model is loading
+            runtimeStatus = .preparing
+            
             await modelManager.installDefaultModelIfNeeded()
+            // If model installation succeeds, set ready status
+            runtimeStatus = .ready
+
             try repository.syncMilestonesCatalog()
 
             refreshDashboardData()
@@ -148,24 +168,34 @@ final class AppContainer {
     func requestModelInstall(_ model: WhisperModelDescriptor) {
         Task {
             do {
+                runtimeStatus = .preparing
                 try await modelManager.install(model: model)
+                runtimeStatus = .ready
                 refreshDashboardData()
             } catch {
+                runtimeStatus = .error(error.localizedDescription)
                 startupErrorMessage = error.localizedDescription
             }
         }
     }
 
-    func makeDefaultModel(_ modelID: String) {
+    func makeDefaultModel(_ modelID: String) async {
         modelManager.setDefaultModel(modelID)
         guard let preferences else { return }
 
         preferences.defaultModelID = modelID
 
         do {
+            runtimeStatus = .preparing
             try repository.savePreferences(preferences)
+            // If the new default model is not installed, install it
+            if !modelManager.isModelInstalled(modelID) {
+                await modelManager.installDefaultModelIfNeeded()
+            }
+            runtimeStatus = .ready
             refreshDashboardData()
         } catch {
+            runtimeStatus = .error(error.localizedDescription)
             startupErrorMessage = error.localizedDescription
         }
     }
