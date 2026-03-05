@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 struct SettingsDashboardView: View {
@@ -16,6 +17,7 @@ struct SettingsDashboardView: View {
                     generalCard(preferences: preferences)
                     shortcutsCard(preferences: preferences)
                     permissionsCard
+                    updatesCard
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -95,6 +97,34 @@ struct SettingsDashboardView: View {
                     defaultShortcut: .defaultToggle,
                     onSave: container.setToggleShortcut
                 )
+            }
+        }
+    }
+
+    private var updatesCard: some View {
+        let updater = container.updaterController.updater
+        return DashboardCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Updates")
+                    .font(.headline)
+
+                Toggle("Automatically check for updates", isOn: Binding(
+                    get: { updater.automaticallyChecksForUpdates },
+                    set: { updater.automaticallyChecksForUpdates = $0 }
+                ))
+
+                Toggle("Automatically download updates", isOn: Binding(
+                    get: { updater.automaticallyDownloadsUpdates },
+                    set: { updater.automaticallyDownloadsUpdates = $0 }
+                ))
+                .disabled(!updater.automaticallyChecksForUpdates)
+
+                Divider()
+
+                Button("Check for Updates Now") {
+                    updater.checkForUpdates()
+                }
+                .buttonStyle(.bordered)
             }
         }
     }

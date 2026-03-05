@@ -18,6 +18,7 @@ struct DashboardRootView: View {
             detailView
         }
         .background(DashboardTheme.windowBackground(colorScheme))
+        .background(_TitlebarSeparatorHider())
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 ControlGroup {
@@ -170,6 +171,20 @@ struct DashboardRootView: View {
         }
     }
 
+}
+
+private struct _TitlebarSeparatorHider: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { view.window?.titlebarSeparatorStyle = .none }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.window?.titlebarSeparatorStyle = .none
+    }
+}
+
+extension DashboardRootView {
     private var runtimeStatus: (label: String, color: Color) {
         switch container.runtimeStatus {
         case .preparing:
