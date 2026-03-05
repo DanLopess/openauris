@@ -6,6 +6,7 @@ final class StreamingInsertionStrategy: InsertionStrategy {
 
     private var lastInsertedText: String = ""
     private var insertedCharCount: Int = 0
+    private var didInsertRealtimeText = false
     private var isInsertingPartial = false
     private var lastPartialInsertAt: Date = .distantPast
     private let minInsertInterval: TimeInterval = 0.8
@@ -14,7 +15,7 @@ final class StreamingInsertionStrategy: InsertionStrategy {
     private var isCurrentAppTerminal = false
     private var activeInsertionService: (any TextInsertionService)?
 
-    var hadRealtimeInsertions: Bool { insertedCharCount > 0 }
+    var hadRealtimeInsertions: Bool { didInsertRealtimeText }
 
     func sessionDidStart(
         engine: any TranscriptionEngine,
@@ -62,6 +63,24 @@ final class StreamingInsertionStrategy: InsertionStrategy {
         partialTask?.cancel()
         partialTask = nil
 
+        // If realtime insertion already placed a prefix of the final transcript,
+        // append only the missing tail to avoid duplicate text when rollback fails.
+        if !finalText.isEmpty,
+           !lastInsertedText.isEmpty,
+           finalText.hasPrefix(lastInsertedText) {
+            let delta = String(finalText.dropFirst(lastInsertedText.count))
+            if delta.isEmpty {
+                return .insertedViaPasteFallback
+            }
+
+            let deltaResult = await insertionService.appendText(delta)
+            if case .failed = deltaResult {
+                // Fall back to the legacy rollback + full append path below.
+            } else {
+                return deltaResult
+            }
+        }
+
         if insertedCharCount > 0 {
             for _ in 0..<insertedCharCount {
                 await insertionService.pressBackspace()
@@ -97,12 +116,14 @@ final class StreamingInsertionStrategy: InsertionStrategy {
         _ = await service.appendText(delta)
         lastInsertedText = newText
         insertedCharCount += delta.count
+        didInsertRealtimeText = true
         lastPartialInsertAt = Date()
     }
 
     private func resetInsertionState() {
         lastInsertedText = ""
         insertedCharCount = 0
+        didInsertRealtimeText = false
         isInsertingPartial = false
         lastPartialInsertAt = .distantPast
     }

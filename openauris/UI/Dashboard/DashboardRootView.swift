@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct DashboardRootView: View {
     @Environment(AppContainer.self) private var container
@@ -17,6 +18,7 @@ struct DashboardRootView: View {
             detailView
         }
         .background(DashboardTheme.windowBackground(colorScheme))
+        .background(_TitlebarSeparatorHider())
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 ControlGroup {
@@ -46,8 +48,27 @@ struct DashboardRootView: View {
             container.bootstrapIfNeeded()
             container.refreshDashboardData()
         }
+        .onAppear {
+            NSApplication.shared.setActivationPolicy(.regular)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+        .onDisappear {
+            NSApplication.shared.setActivationPolicy(.accessory)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openAurisOpenSettings)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = .preferences
+            }
+        }
         .onChange(of: container.sessionManager.state) { _, _ in
             container.refreshDashboardData()
+        }
+        .onChange(of: container.requestedDashboardTab) { _, tab in
+            guard let tab else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = tab
+            }
+            container.requestedDashboardTab = nil
         }
     }
 
@@ -72,9 +93,22 @@ struct DashboardRootView: View {
 
             DashboardCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Runtime")
+                    Text("Runtime Status")
                         .font(.subheadline.weight(.semibold))
                     DashboardStatusPill(text: runtimeStatus.label, color: runtimeStatus.color)
+                    Divider()
+                    Text("Active Model")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(container.modelManager.defaultModelID.capitalized)
+                        .font(.system(.body, design: .rounded).weight(.semibold))
+                    Text(
+                        container.modelManager.isModelInstalled(container.modelManager.defaultModelID)
+                        ? "Installed and ready."
+                        : "Waiting for install."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 }
             }
 
@@ -137,16 +171,28 @@ struct DashboardRootView: View {
         }
     }
 
+}
+
+private struct _TitlebarSeparatorHider: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { view.window?.titlebarSeparatorStyle = .none }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.window?.titlebarSeparatorStyle = .none
+    }
+}
+
+extension DashboardRootView {
     private var runtimeStatus: (label: String, color: Color) {
-        switch container.sessionManager.state {
-        case .idle:
+        switch container.runtimeStatus {
+        case .preparing:
+            return ("Preparing…", .orange)
+        case .ready:
             return ("Ready", .green)
-        case .listening:
-            return ("Listening", .cyan)
-        case .processing, .inserting:
-            return ("Busy", .orange)
-        case .error:
-            return ("Needs Attention", .red)
+        case .error(let message):
+            return ("Error: " + message, .red)
         }
     }
 }

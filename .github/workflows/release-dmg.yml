@@ -1,26 +1,57 @@
-name: Release DMG
+name: Release DMG (Signed)
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version string (for example 1.0.0)
-        required: true
-        type: string
 
 jobs:
   build-sign-notarize:
     runs-on: macos-26
 
     steps:
-      - name: Checkout
+      - name: Checkout (full history for tags)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate VERSION file
+        run: |
+          if ! grep -qE '^\d+\.\d+$' VERSION; then
+            echo "ERROR: VERSION file must contain 'major.minor' (e.g. '0.1')"
+            exit 1
+          fi
+
+      - name: Compute version
+        id: version
+        run: |
+          MAJOR_MINOR=$(cat VERSION)
+          MATCHING_TAGS=$(git tag -l "v${MAJOR_MINOR}.*" 2>/dev/null || true)
+          if [ -n "$MATCHING_TAGS" ]; then
+            HIGHEST=$(echo "$MATCHING_TAGS" \
+              | sed "s/v${MAJOR_MINOR}\.//" \
+              | sort -n \
+              | tail -1)
+            NEXT_PATCH=$(( HIGHEST + 1 ))
+          else
+            ALL_TAGS=$(git tag -l 2>/dev/null || true)
+            if [ -z "$ALL_TAGS" ]; then
+              NEXT_PATCH=1
+            else
+              NEXT_PATCH=0
+            fi
+          fi
+          FULL_VERSION="${MAJOR_MINOR}.${NEXT_PATCH}"
+          echo "FULL_VERSION=$FULL_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set Xcode marketing version
+        run: |
+          xcrun agvtool new-marketing-version "${{ steps.version.outputs.FULL_VERSION }}"
+          xcrun agvtool new-version -all "${{ github.run_number }}"
 
       - name: Build Archive
         run: >-
           xcodebuild
           -project openauris.xcodeproj
-          -scheme openauris
+          -scheme OpenAuris
           -configuration Release
           -destination 'platform=macOS'
           -archivePath build/OpenAuris.xcarchive
@@ -48,9 +79,14 @@ jobs:
 
       - name: Create DMG
         run: |
+          VERSION="${{ steps.version.outputs.FULL_VERSION }}"
           mkdir -p build/dmg-root
-          cp -R build/export/openauris.app build/dmg-root/
-          hdiutil create -volname "OpenAuris" -srcfolder build/dmg-root -ov -format UDZO build/OpenAuris-${{ inputs.version }}.dmg
+          cp -R build/export/OpenAuris.app build/dmg-root/
+          hdiutil create \
+            -volname "OpenAuris" \
+            -srcfolder build/dmg-root \
+            -ov -format UDZO \
+            "build/OpenAuris-${VERSION}.dmg"
 
       - name: Notarize DMG
         env:
@@ -58,15 +94,16 @@ jobs:
           AC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           AC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          xcrun notarytool submit build/OpenAuris-${{ inputs.version }}.dmg \
+          DMG="build/OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.dmg"
+          xcrun notarytool submit "$DMG" \
             --apple-id "$AC_USERNAME" \
             --password "$AC_PASSWORD" \
             --team-id "$AC_TEAM_ID" \
             --wait
-          xcrun stapler staple build/OpenAuris-${{ inputs.version }}.dmg
+          xcrun stapler staple "$DMG"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenAuris-DMG
-          path: build/OpenAuris-${{ inputs.version }}.dmg
+          name: OpenAuris-DMG-${{ steps.version.outputs.FULL_VERSION }}
+          path: build/OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.dmg

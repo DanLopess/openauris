@@ -7,14 +7,10 @@ struct UsageSnapshot: Sendable {
     let totalSpeakingSeconds: Double
     let averageWPM: Double
     let currentStreakDays: Int
-}
 
-struct AchievementDefinition: Sendable {
-    let id: String
-    let title: String
-    let subtitle: String
-    let goal: Int
-    let progressProvider: (UsageSnapshot) -> Int
+    var totalSpokenMinutes: Int {
+        Int(totalSpeakingSeconds / 60)
+    }
 }
 
 struct TopTargetAppUsage: Sendable, Identifiable {
@@ -226,6 +222,11 @@ final class AppRepository {
         try context.fetch(FetchDescriptor<AchievementEntity>(sortBy: [SortDescriptor(\.title)]))
     }
 
+    func syncMilestonesCatalog() throws {
+        try refreshAchievements()
+        try context.save()
+    }
+
     func fetchDailyStats(rangeDays: Int? = nil) throws -> [DailyStatsEntity] {
         let all = try context.fetch(FetchDescriptor<DailyStatsEntity>(sortBy: [SortDescriptor(\.date)]))
         guard let rangeDays else { return all }
@@ -349,20 +350,19 @@ final class AppRepository {
     }
 
     private func refreshAchievements() throws {
+        precondition(MilestoneCatalog.hasUniqueIDs(), "Milestone IDs must be unique.")
+
         let snapshot = try usageSnapshot()
         let existingAchievements = try context.fetch(FetchDescriptor<AchievementEntity>())
         let achievementMap = Dictionary(uniqueKeysWithValues: existingAchievements.map { ($0.id, $0) })
+        let validIDs = Set(MilestoneCatalog.definitions.map(\.id))
 
-        let definitions: [AchievementDefinition] = [
-            AchievementDefinition(id: "first_session", title: "First Session", subtitle: "Complete your first dictation session.", goal: 1, progressProvider: { $0.totalSessions }),
-            AchievementDefinition(id: "words_1000", title: "1,000 Words", subtitle: "Dictate a total of 1,000 words.", goal: 1_000, progressProvider: { $0.totalWords }),
-            AchievementDefinition(id: "streak_7", title: "7-Day Streak", subtitle: "Reach a 7-day speaking streak.", goal: 7, progressProvider: { $0.currentStreakDays }),
-            AchievementDefinition(id: "sessions_25", title: "25 Sessions", subtitle: "Complete 25 dictation sessions.", goal: 25, progressProvider: { $0.totalSessions }),
-            AchievementDefinition(id: "words_10000", title: "10,000 Words", subtitle: "Dictate a total of 10,000 words.", goal: 10_000, progressProvider: { $0.totalWords })
-        ]
+        for achievement in existingAchievements where !validIDs.contains(achievement.id) {
+            context.delete(achievement)
+        }
 
-        for definition in definitions {
-            let progress = min(definition.goal, definition.progressProvider(snapshot))
+        for definition in MilestoneCatalog.definitions {
+            let progress = definition.progress(from: snapshot)
             let existing = achievementMap[definition.id]
 
             let entity = existing ?? AchievementEntity(

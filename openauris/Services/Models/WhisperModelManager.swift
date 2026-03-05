@@ -10,7 +10,7 @@ struct WhisperModelDescriptor: Identifiable, Sendable {
     let description: String
 
     static let curated: [WhisperModelDescriptor] = [
-        WhisperModelDescriptor(id: "tiny", displayName: "Tiny", estimatedSizeBytes: 150_000_000, description: "Fastest, lower accuracy."),
+        WhisperModelDescriptor(id: "tiny", displayName: "Tiny", estimatedSizeBytes: 150_000_000, description: "Fastest, lower accuracy. Recommended only for English speakers."),
         WhisperModelDescriptor(id: "small", displayName: "Small", estimatedSizeBytes: 500_000_000, description: "Balanced for speed and quality."),
         WhisperModelDescriptor(id: "medium", displayName: "Medium", estimatedSizeBytes: 1_500_000_000, description: "Higher quality, heavier memory usage.")
     ]
@@ -19,6 +19,9 @@ struct WhisperModelDescriptor: Identifiable, Sendable {
 enum WhisperModelManagerError: LocalizedError {
     case unknownModel(String)
     case installedArtifactsMissing(String)
+    case modelDeletionFailed(modelID: String, underlyingErrors: [Error])
+    case cannotDeleteDefaultModel
+    case modelDeletionValidationFailed(modelID: String)
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +29,12 @@ enum WhisperModelManagerError: LocalizedError {
             return "Unknown model: \(modelID)."
         case .installedArtifactsMissing(let modelID):
             return "Model artifacts are missing for \(modelID)."
+        case .modelDeletionFailed(let modelID, _):
+            return "Failed to delete model '\(modelID)'. Some files may remain."
+        case .cannotDeleteDefaultModel:
+            return "Cannot delete the default model. Set another model as default first."
+        case .modelDeletionValidationFailed(let modelID):
+            return "Model '\(modelID)' deletion validation failed."
         }
     }
 }
@@ -118,7 +127,7 @@ final class WhisperModelManager {
             _ = try? await existingTask.value
         }
 
-        removeCachedArtifacts(for: modelID)
+        try removeCachedArtifacts(for: modelID)
         installedModelIDs.remove(modelID)
         downloadProgress.removeValue(forKey: modelID)
         downloadStateByModelID[modelID] = "not_installed"
@@ -187,9 +196,32 @@ final class WhisperModelManager {
         )
         downloadProgress[model.id] = 0
 
+        // Track download start and network activity confirmation
+        let downloadStartTime = Date()
+        var hasNetworkActivityStarted = false
+
         _ = try await WhisperKit.download(variant: model.id) { [weak self] progress in
             Task { @MainActor [weak self] in
-                self?.downloadProgress[model.id] = progress.fractionCompleted
+                guard let self = self else { return }
+                
+                // Only show progress if at 0% or network activity confirmed
+                if progress.fractionCompleted == 0 {
+                    // Always allow 0% progress
+                    self.downloadProgress[model.id] = 0
+                } else if hasNetworkActivityStarted {
+                    // Show progress if network activity confirmed
+                    self.downloadProgress[model.id] = progress.fractionCompleted
+                } else {
+                    // Check if this is real progress (not cached/buffered)
+                    let elapsed = Date().timeIntervalSince(downloadStartTime)
+                    if elapsed > 1.0 { // Only consider real after 1 second
+                        hasNetworkActivityStarted = true
+                        self.downloadProgress[model.id] = progress.fractionCompleted
+                    } else {
+                        // Keep at 0% until network activity confirmed
+                        self.downloadProgress[model.id] = 0
+                    }
+                }
             }
         }
 
@@ -208,10 +240,24 @@ final class WhisperModelManager {
         downloadProgress[model.id] = 1
     }
 
-    private func removeCachedArtifacts(for modelID: String) {
+    private func removeCachedArtifacts(for modelID: String) throws {
         let cachedFolders = cachedModelFolders(for: modelID)
+        
+        var fileDeletionErrors: [Error] = []
+        
         for url in cachedFolders {
-            try? FileManager.default.removeItem(at: url)
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                fileDeletionErrors.append(error)
+            }
+        }
+        
+        if !fileDeletionErrors.isEmpty {
+            throw WhisperModelManagerError.modelDeletionFailed(
+                modelID: modelID,
+                underlyingErrors: fileDeletionErrors
+            )
         }
     }
 
@@ -234,29 +280,39 @@ final class WhisperModelManager {
         }
     }
 
-    func remove(modelID: String) {
-        guard modelID != defaultModelID else { return }
+    func remove(modelID: String) throws {
+        guard modelID != defaultModelID else {
+            throw WhisperModelManagerError.cannotDeleteDefaultModel
+        }
+        
+        guard let descriptor = models.first(where: { $0.id == modelID }) else {
+            throw WhisperModelManagerError.unknownModel(modelID)
+        }
+        
+        // Step 1: Delete files
+        try removeCachedArtifacts(for: modelID)
+        
+        // Step 2: Update database
+        try repository.upsertModel(
+            modelID: modelID,
+            displayName: descriptor.displayName,
+            sizeBytes: descriptor.estimatedSizeBytes,
+            state: "not_installed",
+            isDefault: false,
+            installedAt: nil,
+            lastUsedAt: nil,
+            overwriteInstalledAt: true,
+            overwriteLastUsedAt: true
+        )
+        
+        // Step 3: Update in-memory state (only if everything succeeded)
         installedModelIDs.remove(modelID)
         downloadProgress.removeValue(forKey: modelID)
         downloadStateByModelID[modelID] = "not_installed"
-        removeCachedArtifacts(for: modelID)
-
-        if let descriptor = models.first(where: { $0.id == modelID }) {
-            do {
-                try repository.upsertModel(
-                    modelID: modelID,
-                    displayName: descriptor.displayName,
-                    sizeBytes: descriptor.estimatedSizeBytes,
-                    state: "not_installed",
-                    isDefault: false,
-                    installedAt: nil,
-                    lastUsedAt: nil,
-                    overwriteInstalledAt: true,
-                    overwriteLastUsedAt: true
-                )
-            } catch {
-                return
-            }
+        
+        // Step 4: Validate deletion
+        if !validateModelDeletion(modelID) {
+            throw WhisperModelManagerError.modelDeletionValidationFailed(modelID: modelID)
         }
     }
 
@@ -309,6 +365,22 @@ final class WhisperModelManager {
             }
         }
 
+        return true
+    }
+
+    private func validateModelDeletion(_ modelID: String) -> Bool {
+        if installedModelIDs.contains(modelID) { return false }
+        
+        do {
+            let models = try repository.fetchModels()
+            if let model = models.first(where: { $0.modelID == modelID }), 
+               model.downloadState == "installed" {
+                return false
+            }
+        } catch { return false }
+        
+        if hasValidCachedArtifacts(for: modelID) { return false }
+        
         return true
     }
 

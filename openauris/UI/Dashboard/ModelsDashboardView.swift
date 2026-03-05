@@ -31,8 +31,12 @@ struct ModelsDashboardView: View {
         ) {
             Button("Remove", role: .destructive) {
                 guard let pendingRemoveModelID else { return }
-                container.modelManager.remove(modelID: pendingRemoveModelID)
-                self.pendingRemoveModelID = nil
+                do {
+                    try container.modelManager.remove(modelID: pendingRemoveModelID)
+                    self.pendingRemoveModelID = nil
+                } catch {
+                    container.startupErrorMessage = error.localizedDescription
+                }
             }
             Button("Cancel", role: .cancel) {}
         }
@@ -84,7 +88,9 @@ struct ModelsDashboardView: View {
                             .foregroundStyle(.secondary)
                     } else if isInstalled {
                         Button("Make Default") {
-                            container.makeDefaultModel(model.id)
+                            Task {
+                                await container.makeDefaultModel(model.id)
+                            }
                         }
                         .buttonStyle(.bordered)
                         .disabled(isDefault)

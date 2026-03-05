@@ -1,5 +1,6 @@
-import SwiftUI
+import Sparkle
 import SwiftData
+import SwiftUI
 
 @main
 struct OpenAurisApp: App {
@@ -12,7 +13,7 @@ struct OpenAurisApp: App {
         } label: {
             MenuBarLabelView()
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
 
         Window("OpenAuris", id: OpenAurisConstants.dashboardWindowID) {
             DashboardRootView()
@@ -23,5 +24,10 @@ struct OpenAurisApp: App {
         .defaultLaunchBehavior(.presented)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
+        .commands {
+            DashboardCommands {
+                container.updaterController.updater.checkForUpdates()
+            }
+        }
     }
 }
