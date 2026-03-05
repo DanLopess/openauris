@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import Observation
+import Sparkle
 import SwiftData
 
 @Observable
@@ -15,6 +16,7 @@ final class AppContainer {
     let modelManager: WhisperModelManager
     let sessionManager: DictationSessionManager
     let hotkeyManager: GlobalHotkeyManager
+    let updaterController: SPUStandardUpdaterController
 
     var preferences: UserPreferenceEntity?
     var sessions: [DictationSessionEntity] = []
@@ -59,6 +61,11 @@ final class AppContainer {
         overlayController = OverlayPanelController(viewModel: bubbleViewModel)
         modelManager = WhisperModelManager(repository: repository)
         hotkeyManager = GlobalHotkeyManager()
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
 
         let audioCaptureService = AudioCaptureService()
         let engine = WhisperKitTranscriptionEngine()

@@ -9,21 +9,74 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build and Release
+    name: Build, Test, and Release
     runs-on: macos-26
 
     steps:
-      - name: Checkout
+      - name: Checkout (full history for tags)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Show Xcode
+      - name: Validate VERSION file
+        run: |
+          if ! grep -qE '^\d+\.\d+$' VERSION; then
+            echo "ERROR: VERSION file must contain exactly 'major.minor' (e.g. '0.1')"
+            exit 1
+          fi
+          echo "VERSION file is valid: $(cat VERSION)"
+
+      - name: Compute next version
+        id: version
+        run: |
+          MAJOR_MINOR=$(cat VERSION)
+          MATCHING_TAGS=$(git tag -l "v${MAJOR_MINOR}.*" 2>/dev/null || true)
+          if [ -n "$MATCHING_TAGS" ]; then
+            HIGHEST=$(echo "$MATCHING_TAGS" \
+              | sed "s/v${MAJOR_MINOR}\.//" \
+              | sort -n \
+              | tail -1)
+            NEXT_PATCH=$(( HIGHEST + 1 ))
+          else
+            ALL_TAGS=$(git tag -l 2>/dev/null || true)
+            if [ -z "$ALL_TAGS" ]; then
+              NEXT_PATCH=1
+            else
+              NEXT_PATCH=0
+            fi
+          fi
+          FULL_VERSION="${MAJOR_MINOR}.${NEXT_PATCH}"
+          echo "FULL_VERSION=$FULL_VERSION" >> "$GITHUB_OUTPUT"
+          echo "TAG=v${FULL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Computed version: $FULL_VERSION"
+
+      - name: Show Xcode version
         run: xcodebuild -version
+
+      - name: Set Xcode marketing version
+        run: |
+          xcrun agvtool new-marketing-version "${{ steps.version.outputs.FULL_VERSION }}"
+          xcrun agvtool new-version -all "${{ github.run_number }}"
+
+      - name: Run tests
+        run: >-
+          xcodebuild
+          -project openauris.xcodeproj
+          -scheme OpenAuris
+          -destination 'platform=macOS'
+          -configuration Debug
+          -derivedDataPath build/DerivedData
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          -only-testing:OpenAurisTests
+          test
 
       - name: Build Release
         run: >-
           xcodebuild
           -project openauris.xcodeproj
-          -scheme openauris
+          -scheme OpenAuris
           -configuration Release
           -derivedDataPath build/DerivedData
           -destination 'platform=macOS,arch=arm64'
@@ -33,19 +86,61 @@ jobs:
 
       - name: Package .app as zip
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Release/openauris.app"
+          VERSION="${{ steps.version.outputs.FULL_VERSION }}"
+          APP_PATH="build/DerivedData/Build/Products/Release/OpenAuris.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "Expected app bundle missing at $APP_PATH"
             exit 1
           fi
-          ZIP_NAME="openauris-v${{ github.run_number }}-macos.zip"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_NAME"
-          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "OpenAuris-${VERSION}.zip"
+
+      - name: Download Sparkle CLI tools
+        run: |
+          SPARKLE_VERSION="2.6.4"
+          curl -fsSL \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
+            -o /tmp/Sparkle.tar.xz
+          mkdir -p /tmp/sparkle-tools
+          tar -xf /tmp/Sparkle.tar.xz -C /tmp/sparkle-tools
+
+      - name: Sign update zip for Sparkle
+        id: sparkle_sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          ZIP="OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.zip"
+          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" \
+            | /tmp/sparkle-tools/bin/sign_update "$ZIP" --ed-key-file -)
+          echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_OUTPUT"
+          echo "Sparkle signature: $SIGNATURE"
+
+      - name: Update appcast.xml
+        run: |
+          VERSION="${{ steps.version.outputs.FULL_VERSION }}"
+          TAG="${{ steps.version.outputs.TAG }}"
+          ZIP="OpenAuris-${VERSION}.zip"
+          python3 scripts/update_appcast.py \
+            --version "$VERSION" \
+            --build "${{ github.run_number }}" \
+            --url "https://github.com/DanLopess/openauris/releases/download/${TAG}/${ZIP}" \
+            --signature "${{ steps.sparkle_sign.outputs.SPARKLE_SIGNATURE }}" \
+            --zip-path "$ZIP"
+
+      - name: Commit updated appcast.xml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "chore: update appcast.xml for ${{ steps.version.outputs.TAG }}"
+          git push
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
-          body: Automatic release created from push to main/master.
-          files: ${{ env.ZIP_NAME }}
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: Version ${{ steps.version.outputs.FULL_VERSION }}
+          body: |
+            ## OpenAuris ${{ steps.version.outputs.FULL_VERSION }}
+
+            Automatic release from push to main. Install via the in-app updater or download below.
+          files: OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.zip

@@ -1,5 +1,6 @@
-import SwiftUI
+import Sparkle
 import SwiftData
+import SwiftUI
 
 @main
 struct OpenAurisApp: App {
@@ -24,7 +25,9 @@ struct OpenAurisApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
-            DashboardCommands()
+            DashboardCommands {
+                container.updaterController.updater.checkForUpdates()
+            }
         }
     }
 }
