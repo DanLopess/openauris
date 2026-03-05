@@ -19,7 +19,7 @@ jobs:
         run: >-
           xcodebuild
           -project openauris.xcodeproj
-          -scheme openauris
+          -scheme OpenAuris
           -destination 'platform=macOS,arch=arm64'
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
@@ -29,9 +29,9 @@ jobs:
         run: >-
           xcodebuild
           -project openauris.xcodeproj
-          -scheme openauris
+          -scheme OpenAuris
           -destination 'platform=macOS,arch=arm64'
-          -only-testing:openaurisTests
+          -only-testing:OpenAurisTests
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
           test

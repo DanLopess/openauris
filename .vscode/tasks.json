@@ -7,7 +7,7 @@
       "command": "xcodebuild",
       "args": [
         "-project", "openauris.xcodeproj",
-        "-scheme", "openauris",
+        "-scheme", "OpenAuris",
         "-destination", "platform=macOS",
         "-configuration", "Debug",
         "-derivedDataPath", ".build",
@@ -27,7 +27,7 @@
       "dependsOn": "Build OpenAuris",
       "command": "open",
       "args": [
-        ".build/Build/Products/Debug/openauris.app"
+        ".build/Build/Products/Debug/OpenAuris.app"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -40,11 +40,11 @@
       "command": "xcodebuild",
       "args": [
         "-project", "openauris.xcodeproj",
-        "-scheme", "openauris",
+        "-scheme", "OpenAuris",
         "-destination", "platform=macOS",
         "-configuration", "Debug",
         "-derivedDataPath", ".build",
-        "-only-testing:openaurisTests",
+        "-only-testing:OpenAurisTests",
         "test"
       ],
       "group": "test"
