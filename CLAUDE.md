@@ -52,3 +52,15 @@ Rules and conventions for Claude Code when working in this repository. For comma
 - Don't create helpers or abstractions for one-time use.
 - Don't add backwards-compatibility shims or feature flags unless asked.
 - Don't use `force try` (`try!`) or force unwraps (`!`) in production code.
+
+---
+
+## Response Format
+
+At the end of every task response, include a concise summary that covers:
+- **Root cause** — what was wrong and why
+- **What changed** — files and lines modified, and what each change does
+- **Why it works** — the mechanism that makes the fix correct
+- **Local vs CI gap** — if applicable, why the issue only surfaced in one environment
+
+Keep it tight: bullet points, no padding, no repetition of what was already explained above.

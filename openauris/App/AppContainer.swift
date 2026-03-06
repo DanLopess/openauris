@@ -52,6 +52,10 @@ final class AppContainer {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
+        if isUITesting {
+            NSApplication.shared.setActivationPolicy(.regular)
+        }
+
         modelContainer = PersistenceController.makeModelContainer()
         let context = modelContainer.mainContext
         repository = AppRepository(context: context)
@@ -134,11 +138,10 @@ final class AppContainer {
 
             permissionManager.refresh()
 
-            // Set preparing status while model is loading
-            runtimeStatus = .preparing
-            
-            await modelManager.installDefaultModelIfNeeded()
-            // If model installation succeeds, set ready status
+            if !isUITesting {
+                runtimeStatus = .preparing
+                await modelManager.installDefaultModelIfNeeded()
+            }
             runtimeStatus = .ready
 
             try repository.syncMilestonesCatalog()
