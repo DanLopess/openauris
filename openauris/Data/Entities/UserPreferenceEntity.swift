@@ -14,6 +14,7 @@ final class UserPreferenceEntity {
     var onboardingCompleted: Bool
     var hasOpenedDashboardOnce: Bool?
     var realtimeStreamingEnabled: Bool = false
+    var modelDownloadPath: String? = nil
 
     init(
         id: String = "default",
@@ -26,7 +27,8 @@ final class UserPreferenceEntity {
         insertionPrefersAccessibility: Bool,
         onboardingCompleted: Bool,
         hasOpenedDashboardOnce: Bool?,
-        realtimeStreamingEnabled: Bool = false
+        realtimeStreamingEnabled: Bool = false,
+        modelDownloadPath: String? = nil
     ) {
         self.id = id
         self.holdShortcutData = holdShortcutData
@@ -39,5 +41,6 @@ final class UserPreferenceEntity {
         self.onboardingCompleted = onboardingCompleted
         self.hasOpenedDashboardOnce = hasOpenedDashboardOnce
         self.realtimeStreamingEnabled = realtimeStreamingEnabled
+        self.modelDownloadPath = modelDownloadPath
     }
 }

@@ -47,6 +47,7 @@ struct ModelsDashboardView: View {
         let isDownloading = container.modelManager.isModelDownloading(model.id)
         let progress = container.modelManager.downloadProgress[model.id]
         let isDefault = model.id == container.modelManager.defaultModelID
+        let downloadError = container.modelManager.downloadErrorByModelID[model.id]
 
         return DashboardCard {
             HStack(spacing: 14) {
@@ -60,8 +61,8 @@ struct ModelsDashboardView: View {
                         }
 
                         DashboardStatusPill(
-                            text: stateLabel(isInstalled: isInstalled, isDownloading: isDownloading),
-                            color: stateColor(isInstalled: isInstalled, isDownloading: isDownloading)
+                            text: stateLabel(isInstalled: isInstalled, isDownloading: isDownloading, hasFailed: downloadError != nil),
+                            color: stateColor(isInstalled: isInstalled, isDownloading: isDownloading, hasFailed: downloadError != nil)
                         )
                     }
 
@@ -76,6 +77,12 @@ struct ModelsDashboardView: View {
                     if isDownloading {
                         ProgressView(value: progress ?? 0)
                             .frame(maxWidth: 200)
+                    }
+
+                    if let downloadError {
+                        Text(downloadError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
                 }
 
@@ -112,6 +119,11 @@ struct ModelsDashboardView: View {
                             }
                             .buttonStyle(.bordered)
                         }
+                    } else if downloadError != nil {
+                        Button("Retry", systemImage: "arrow.clockwise") {
+                            container.requestModelInstall(model)
+                        }
+                        .buttonStyle(.borderedProminent)
                     } else {
                         Button("Download", systemImage: "arrow.down.circle.fill") {
                             container.requestModelInstall(model)
@@ -123,13 +135,15 @@ struct ModelsDashboardView: View {
         }
     }
 
-    private func stateLabel(isInstalled: Bool, isDownloading: Bool) -> String {
+    private func stateLabel(isInstalled: Bool, isDownloading: Bool, hasFailed: Bool) -> String {
         if isDownloading { return "Downloading" }
+        if hasFailed { return "Download Failed" }
         return isInstalled ? "Installed" : "Not Installed"
     }
 
-    private func stateColor(isInstalled: Bool, isDownloading: Bool) -> Color {
+    private func stateColor(isInstalled: Bool, isDownloading: Bool, hasFailed: Bool) -> Color {
         if isDownloading { return .orange }
+        if hasFailed { return .red }
         return isInstalled ? .green : .secondary
     }
 }

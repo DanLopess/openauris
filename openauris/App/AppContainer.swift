@@ -138,6 +138,8 @@ final class AppContainer {
 
             permissionManager.refresh()
 
+            modelManager.downloadBasePath = prefs.modelDownloadPath
+
             if !isUITesting {
                 runtimeStatus = .preparing
                 await modelManager.installDefaultModelIfNeeded()
@@ -216,6 +218,20 @@ final class AppContainer {
 
         preferences.launchAtLogin = enabled
         LoginItemManager.setEnabled(enabled)
+
+        do {
+            try repository.savePreferences(preferences)
+        } catch {
+            startupErrorMessage = error.localizedDescription
+        }
+    }
+
+    func setModelDownloadPath(_ path: String?) {
+        guard let preferences else { return }
+
+        preferences.modelDownloadPath = path
+        modelManager.downloadBasePath = path
+        modelManager.reloadFromStore()
 
         do {
             try repository.savePreferences(preferences)

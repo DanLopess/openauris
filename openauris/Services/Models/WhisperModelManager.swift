@@ -47,6 +47,21 @@ final class WhisperModelManager {
     private(set) var defaultModelID: String = OpenAurisConstants.defaultModelID
     private(set) var downloadProgress: [String: Double] = [:]
     private(set) var downloadStateByModelID: [String: String] = [:]
+    private(set) var downloadErrorByModelID: [String: String] = [:]
+
+    var downloadBasePath: String?
+
+    private var resolvedDownloadBase: URL {
+        WhisperModelManager.downloadBase(for: downloadBasePath)
+    }
+
+    nonisolated static func downloadBase(for customPath: String?) -> URL {
+        if let custom = customPath {
+            return URL(filePath: custom)
+        }
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appending(path: "OpenAuris/Models", directoryHint: .isDirectory)
+    }
 
     private let repository: AppRepository
     private var installTasks: [String: Task<Void, Error>] = [:]
@@ -131,6 +146,7 @@ final class WhisperModelManager {
         installedModelIDs.remove(modelID)
         downloadProgress.removeValue(forKey: modelID)
         downloadStateByModelID[modelID] = "not_installed"
+        downloadErrorByModelID.removeValue(forKey: modelID)
 
         try repository.upsertModel(
             modelID: descriptor.id,
@@ -157,6 +173,8 @@ final class WhisperModelManager {
             return
         }
 
+        downloadErrorByModelID.removeValue(forKey: model.id)
+
         let installTask = Task { @MainActor in
             try await self.performInstall(model: model)
         }
@@ -168,6 +186,7 @@ final class WhisperModelManager {
         } catch {
             downloadProgress.removeValue(forKey: model.id)
             downloadStateByModelID[model.id] = "not_installed"
+            downloadErrorByModelID[model.id] = error.localizedDescription
             try? repository.upsertModel(
                 modelID: model.id,
                 displayName: model.displayName,
@@ -196,11 +215,14 @@ final class WhisperModelManager {
         )
         downloadProgress[model.id] = 0
 
+        let downloadBase = resolvedDownloadBase
+        try FileManager.default.createDirectory(at: downloadBase, withIntermediateDirectories: true)
+
         // Track download start and network activity confirmation
         let downloadStartTime = Date()
         var hasNetworkActivityStarted = false
 
-        _ = try await WhisperKit.download(variant: model.id) { [weak self] progress in
+        _ = try await WhisperKit.download(variant: model.id, downloadBase: downloadBase) { [weak self] progress in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 
@@ -385,8 +407,9 @@ final class WhisperModelManager {
     }
 
     private func cachedModelFolders(for modelID: String) -> [URL] {
-        let cacheRoot = FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Documents/huggingface/models/argmaxinc/whisperkit-coreml", directoryHint: .isDirectory)
+        // WhisperKit stores downloads at <downloadBase>/models/argmaxinc/whisperkit-coreml/
+        let cacheRoot = resolvedDownloadBase
+            .appending(path: "models/argmaxinc/whisperkit-coreml", directoryHint: .isDirectory)
 
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: cacheRoot,

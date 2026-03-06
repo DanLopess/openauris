@@ -29,9 +29,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		DDA4586A2F4CE33D005A1758 /* openauris.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = openauris.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		DDA458792F4CE33E005A1758 /* openaurisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = openaurisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		DDA458832F4CE33E005A1758 /* openaurisUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = openaurisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDA4586A2F4CE33D005A1758 /* openauris.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = openauris.app; path = OpenAuris.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDA458792F4CE33E005A1758 /* openaurisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = openaurisTests.xctest; path = OpenAurisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDA458832F4CE33E005A1758 /* openaurisUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = openaurisUITests.xctest; path = OpenAurisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -102,9 +102,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		DDA458692F4CE33D005A1758 /* openauris */ = {
+		DDA458692F4CE33D005A1758 /* OpenAuris */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = DDA4588D2F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "openauris" */;
+			buildConfigurationList = DDA4588D2F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "OpenAuris" */;
 			buildPhases = (
 				DDA458662F4CE33D005A1758 /* Sources */,
 				DDA458672F4CE33D005A1758 /* Frameworks */,
@@ -126,9 +126,9 @@
 			productReference = DDA4586A2F4CE33D005A1758 /* openauris.app */;
 			productType = "com.apple.product-type.application";
 		};
-		DDA458782F4CE33E005A1758 /* openaurisTests */ = {
+		DDA458782F4CE33E005A1758 /* OpenAurisTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = DDA458902F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "openaurisTests" */;
+			buildConfigurationList = DDA458902F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "OpenAurisTests" */;
 			buildPhases = (
 				DDA458752F4CE33E005A1758 /* Sources */,
 				DDA458762F4CE33E005A1758 /* Frameworks */,
@@ -149,9 +149,9 @@
 			productReference = DDA458792F4CE33E005A1758 /* openaurisTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		DDA458822F4CE33E005A1758 /* openaurisUITests */ = {
+		DDA458822F4CE33E005A1758 /* OpenAurisUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = DDA458932F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "openaurisUITests" */;
+			buildConfigurationList = DDA458932F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "OpenAurisUITests" */;
 			buildPhases = (
 				DDA4587F2F4CE33E005A1758 /* Sources */,
 				DDA458802F4CE33E005A1758 /* Frameworks */,
@@ -213,9 +213,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				DDA458692F4CE33D005A1758 /* openauris */,
-				DDA458782F4CE33E005A1758 /* openaurisTests */,
-				DDA458822F4CE33E005A1758 /* openaurisUITests */,
+				DDA458692F4CE33D005A1758 /* OpenAuris */,
+				DDA458782F4CE33E005A1758 /* OpenAurisTests */,
+				DDA458822F4CE33E005A1758 /* OpenAurisUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -271,12 +271,12 @@
 /* Begin PBXTargetDependency section */
 		DDA4587B2F4CE33E005A1758 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = DDA458692F4CE33D005A1758 /* openauris */;
+			target = DDA458692F4CE33D005A1758 /* OpenAuris */;
 			targetProxy = DDA4587A2F4CE33E005A1758 /* PBXContainerItemProxy */;
 		};
 		DDA458852F4CE33E005A1758 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = DDA458692F4CE33D005A1758 /* openauris */;
+			target = DDA458692F4CE33D005A1758 /* OpenAuris */;
 			targetProxy = DDA458842F4CE33E005A1758 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -418,12 +418,12 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = openauris/SparkleKeys.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OpenAuris;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenAuris needs microphone access to transcribe speech locally on your Mac.";
-				INFOPLIST_FILE = openauris/SparkleKeys.plist;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/DanLopess/openauris/main/appcast.xml";
 				INFOPLIST_KEY_SUPublicEDKey = "AVBODNkCC+xPAlMZ2it+m2GzWoVphjWqCub9yz2Reu8=";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -578,7 +578,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		DDA4588D2F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "openauris" */ = {
+		DDA4588D2F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "OpenAuris" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				DDA4588E2F4CE33E005A1758 /* Debug */,
@@ -587,7 +587,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		DDA458902F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "openaurisTests" */ = {
+		DDA458902F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "OpenAurisTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				DDA458912F4CE33E005A1758 /* Debug */,
@@ -596,7 +596,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		DDA458932F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "openaurisUITests" */ = {
+		DDA458932F4CE33E005A1758 /* Build configuration list for PBXNativeTarget "OpenAurisUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				DDA458942F4CE33E005A1758 /* Debug */,
