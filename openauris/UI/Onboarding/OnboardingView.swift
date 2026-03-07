@@ -156,7 +156,7 @@ struct OnboardingView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {
-                            ProgressView("Preparing model...")
+                            ProgressView("Preparing model for immediate dictation...")
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     } else if !effectivelyInstalled {
@@ -221,9 +221,9 @@ struct OnboardingView: View {
     private var ready: some View {
         onboardingPage(
             title: "You’re Ready",
-            subtitle: "Open the dashboard and start dictating.",
+            subtitle: "Open the dashboard and start dictating immediately.",
             body: {
-                Text("Use your hold or toggle shortcut from any app.")
+                Text("Use your hold or toggle shortcut from any app without waiting for the model to load.")
                     .font(.body)
                     .foregroundStyle(.secondary)
             }

@@ -70,4 +70,23 @@ final class openaurisUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Minutes Spoken"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Sessions"].exists)
     }
+
+    @MainActor
+    func testClosingCommandCenterDoesNotQuitMenuBarApp() throws {
+        XCTAssertTrue(app.buttons["Overview"].waitForExistence(timeout: 8))
+
+        app.typeKey("w", modifierFlags: .command)
+
+        XCTAssertFalse(app.wait(for: .notRunning, timeout: 5))
+    }
+
+    @MainActor
+    func testAppMenuDoesNotExposeOpenCommandCenter() throws {
+        let appMenu = app.menuBars.menuBarItems["OpenAuris"]
+        XCTAssertTrue(appMenu.waitForExistence(timeout: 5))
+        appMenu.click()
+
+        let openCommandCenter = app.menuBars.menuItems["Open Command Center"]
+        XCTAssertFalse(openCommandCenter.waitForExistence(timeout: 1))
+    }
 }
