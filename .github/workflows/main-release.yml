@@ -121,10 +121,20 @@ jobs:
             echo "Sparkle sign_update tool is not executable"
             exit 1
           fi
-          SIGNATURE=$(
-            printf '%s' "$SPARKLE_PRIVATE_KEY" |
-              /tmp/sparkle-tools/bin/sign_update --ed-key-file - -p "$ZIP"
-          )
+          # Normalize possible CRLF pasted into the GitHub secret.
+          CLEAN_SPARKLE_KEY="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | tr -d '\r')"
+          KEY_LENGTH="$(printf '%s' "$CLEAN_SPARKLE_KEY" | tr -d '\n' | wc -c | tr -d ' ')"
+          echo "Sparkle key length (without newlines): $KEY_LENGTH"
+
+          if ! SIGNATURE="$(
+            printf '%s\n' "$CLEAN_SPARKLE_KEY" |
+              /tmp/sparkle-tools/bin/sign_update --ed-key-file - -p "$ZIP" 2>&1
+          )"; then
+            echo "Sparkle sign_update failed:"
+            echo "$SIGNATURE"
+            exit 1
+          fi
+
           echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_OUTPUT"
           echo "Sparkle signature: $SIGNATURE"
 
