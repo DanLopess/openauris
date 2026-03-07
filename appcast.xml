@@ -1,11 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0"
-     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
-     xmlns:dc="http://purl.org/dc/elements/1.1/">
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <title>OpenAuris</title>
     <link>https://github.com/DanLopess/openauris</link>
     <description>OpenAuris release feed</description>
     <language>en</language>
+    <item>
+      <title>Version 0.0.1</title>
+      <pubDate>Sat, 07 Mar 2026 22:43:45 +0000</pubDate>
+      <enclosure url="https://github.com/DanLopess/openauris/releases/download/v0.0.1/OpenAuris-0.0.1.zip" type="application/octet-stream" length="5092285" sparkle:version="7" sparkle:shortVersionString="0.0.1" sparkle:edSignature="/fkjxfiFyglpSaXJVpfdzLgfKKE/gSHgDSTkiGLxGYNi9rzXVcb2GM46aF2W36wNMwrqaCjx4ncl28QL6A4sAQ==" />
+    </item>
   </channel>
 </rss>
