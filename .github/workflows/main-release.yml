@@ -31,7 +31,10 @@ jobs:
         id: version
         run: |
           MAJOR_MINOR=$(cat VERSION)
-          MATCHING_TAGS=$(git tag -l "v${MAJOR_MINOR}.*" 2>/dev/null || true)
+          MATCHING_TAGS=$(
+            git tag -l "v${MAJOR_MINOR}.*" 2>/dev/null \
+              | grep -E "^v${MAJOR_MINOR}\.[0-9]+$" || true
+          )
           if [ -n "$MATCHING_TAGS" ]; then
             HIGHEST=$(echo "$MATCHING_TAGS" \
               | sed "s/v${MAJOR_MINOR}\.//" \
@@ -39,12 +42,7 @@ jobs:
               | tail -1)
             NEXT_PATCH=$(( HIGHEST + 1 ))
           else
-            ALL_TAGS=$(git tag -l 2>/dev/null || true)
-            if [ -z "$ALL_TAGS" ]; then
-              NEXT_PATCH=1
-            else
-              NEXT_PATCH=0
-            fi
+            NEXT_PATCH=1
           fi
           FULL_VERSION="${MAJOR_MINOR}.${NEXT_PATCH}"
           echo "FULL_VERSION=$FULL_VERSION" >> "$GITHUB_OUTPUT"
@@ -150,14 +148,6 @@ jobs:
             --signature "${{ steps.sparkle_sign.outputs.SPARKLE_SIGNATURE }}" \
             --zip-path "$ZIP"
 
-      - name: Commit updated appcast.xml
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
-          git commit -m "chore: update appcast.xml for ${{ steps.version.outputs.TAG }}"
-          git push
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -168,3 +158,15 @@ jobs:
 
             Automatic release from push to main. Install via the in-app updater or download below.
           files: OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.zip
+
+      - name: Commit updated appcast.xml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          if git diff --cached --quiet; then
+            echo "No appcast changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: update appcast.xml for ${{ steps.version.outputs.TAG }}"
+          git push
