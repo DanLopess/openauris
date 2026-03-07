@@ -69,6 +69,18 @@ To enable full WhisperKit transcription, add package dependency:
 - Apple Silicon
 - Xcode 26.2+
 
+## Installation
+
+1. Open the latest release: [GitHub Releases](https://github.com/DanLopess/openauris/releases/latest)
+2. Download `OpenAuris-<version>.zip` (for example, `OpenAuris-0.0.1.zip`).
+3. Unzip it and move `OpenAuris.app` to `/Applications`.
+4. Launch `OpenAuris.app`.
+5. If macOS blocks first launch, right-click the app, choose **Open**, and confirm.
+
+### Updating
+
+OpenAuris includes in-app updates via Sparkle. Once installed, future releases can be installed from inside the app when prompted.
+
 ## Build
 
 ```bash

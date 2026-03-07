@@ -52,11 +52,6 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Set Xcode marketing version
-        run: |
-          xcrun agvtool new-marketing-version "${{ steps.version.outputs.FULL_VERSION }}"
-          xcrun agvtool new-version -all "${{ github.run_number }}"
-
       - name: Run tests
         run: >-
           xcodebuild
@@ -67,6 +62,8 @@ jobs:
           -derivedDataPath build/DerivedData
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
+          MARKETING_VERSION=${{ steps.version.outputs.FULL_VERSION }}
+          CURRENT_PROJECT_VERSION=${{ github.run_number }}
           -only-testing:OpenAurisTests
           test
 
@@ -80,6 +77,8 @@ jobs:
           -destination 'platform=macOS,arch=arm64'
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
+          MARKETING_VERSION=${{ steps.version.outputs.FULL_VERSION }}
+          CURRENT_PROJECT_VERSION=${{ github.run_number }}
           build
 
       - name: Package .app as zip
@@ -90,6 +89,10 @@ jobs:
             echo "Expected app bundle missing at $APP_PATH"
             exit 1
           fi
+          # Sparkle validation requires a valid app bundle code signature.
+          # Release builds here disable Xcode signing, so we perform an explicit ad-hoc sign.
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "OpenAuris-${VERSION}.zip"
 
       - name: Download Sparkle CLI tools
