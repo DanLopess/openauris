@@ -44,7 +44,13 @@ struct DictationSessionManagerModelPreparationTests {
         await engine.waitForPrepareToStart()
 
         fixture.manager.handleHotkeyAction(GlobalHotkeyManager.Action.toggle)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        await waitUntil {
+            let bubbleState = fixture.bubble.state
+            if case .error(let message) = bubbleState {
+                return message.localizedCaseInsensitiveContains("prepar")
+            }
+            return false
+        }
 
         #expect(fixture.manager.state == DictationSessionState.idle)
         #expect(fixture.audio.startCallCount == 0)
@@ -66,7 +72,11 @@ struct DictationSessionManagerModelPreparationTests {
 
         try await fixture.manager.preloadActiveModelForImmediateUse()
         fixture.manager.handleHotkeyAction(GlobalHotkeyManager.Action.toggle)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        await waitUntil {
+            let audioStartCallCount = fixture.audio.startCallCount
+            let engineStartStreamingCallCount = await fixture.engine.startStreamingCallCount
+            return audioStartCallCount == 1 && engineStartStreamingCallCount == 1
+        }
 
         #expect(fixture.audio.startCallCount == 1)
         #expect(await fixture.engine.startStreamingCallCount == 1)
@@ -106,6 +116,24 @@ struct DictationSessionManagerModelPreparationTests {
             bubble: bubble,
             engine: engine
         )
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 1_000_000_000,
+        pollIntervalNanoseconds: UInt64 = 10_000_000,
+        condition: @escaping () async -> Bool
+    ) async {
+        let deadline = ContinuousClock.now + .nanoseconds(Int64(timeoutNanoseconds))
+
+        while !(await condition()) {
+            guard ContinuousClock.now < deadline else {
+                Issue.record("Timed out waiting for asynchronous state transition")
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
+        }
     }
 }
 
