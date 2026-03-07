@@ -7,6 +7,11 @@
     <language>en</language>
     <item>
       <title>Version 0.0.1</title>
+      <pubDate>Sat, 07 Mar 2026 23:07:53 +0000</pubDate>
+      <enclosure url="https://github.com/DanLopess/openauris/releases/download/v0.0.1/OpenAuris-0.0.1.zip" type="application/octet-stream" length="5043610" sparkle:version="8" sparkle:shortVersionString="0.0.1" sparkle:edSignature="XiHAJkkKweuxVY9sefTuEoH9dJJpByWYqDjvRaeMOViHNXG0ujdgyZhYwmGi9LQSOd8AwKiqKeWEk45QXd1iAQ==" />
+    </item>
+    <item>
+      <title>Version 0.0.1</title>
       <pubDate>Sat, 07 Mar 2026 22:43:45 +0000</pubDate>
       <enclosure url="https://github.com/DanLopess/openauris/releases/download/v0.0.1/OpenAuris-0.0.1.zip" type="application/octet-stream" length="5092285" sparkle:version="7" sparkle:shortVersionString="0.0.1" sparkle:edSignature="/fkjxfiFyglpSaXJVpfdzLgfKKE/gSHgDSTkiGLxGYNi9rzXVcb2GM46aF2W36wNMwrqaCjx4ncl28QL6A4sAQ==" />
     </item>
