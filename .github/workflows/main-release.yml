@@ -109,10 +109,22 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           ZIP="OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.zip"
-          KEY_FILE=$(mktemp)
-          echo "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
-          SIGNATURE=$(/tmp/sparkle-tools/bin/sign_update "$ZIP" -f "$KEY_FILE")
-          rm -f "$KEY_FILE"
+          if [ ! -f "$ZIP" ]; then
+            echo "Expected update archive missing at $ZIP"
+            exit 1
+          fi
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "SPARKLE_PRIVATE_KEY is not set"
+            exit 1
+          fi
+          if [ ! -x /tmp/sparkle-tools/bin/sign_update ]; then
+            echo "Sparkle sign_update tool is not executable"
+            exit 1
+          fi
+          SIGNATURE=$(
+            printf '%s' "$SPARKLE_PRIVATE_KEY" |
+              /tmp/sparkle-tools/bin/sign_update --ed-key-file - -p "$ZIP"
+          )
           echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_OUTPUT"
           echo "Sparkle signature: $SIGNATURE"
 
