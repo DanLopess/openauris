@@ -1,84 +1,66 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Rules and conventions for Claude Code when working in this repository. For commands, requirements, architecture, and flows — see `README.md` and `docs/ARCHITECTURE.md`.
 
-## Requirements
+---
 
-- macOS 26+, Apple Silicon
-- Xcode 26.2+
-- WhisperKit is a **required** dependency — transcription will not compile without it
+## Hard Rules
 
-## Commands
+- **Never install a new dependency without asking first.**
+- **Don't create features that weren't explicitly requested.**
+- **Don't modify or refactor working code unless explicitly asked to.**
+- **A feature or fix is not complete until the project builds and all tests pass.**
+- **Every new feature must include tests — unit tests at minimum, UI tests where applicable.**
 
-**Build:**
-```bash
-xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
-```
+---
 
-**Run app (terminal):**
-```bash
-xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build build
-open .build/Build/Products/Debug/OpenAuris.app
-```
+## Stack & Conventions
 
-**Run all unit tests:**
-```bash
-xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:OpenAurisTests test
-```
+- **Language:** Swift 6, strict concurrency. All UI and session state is `@MainActor`.
+- **UI:** SwiftUI + SwiftData. Menu bar-first. No UIKit.
+- **State:** Swift Observation (`@Observable`). No `ObservableObject` or Combine.
+- **Persistence:** SwiftData via `AppRepository` (main context only, all calls `@MainActor`).
+- **Async:** Structured concurrency (`async/await`, `Task`, `actor`). No callbacks or GCD.
+- **Transcription:** Local-only via WhisperKit. No network calls for audio or text.
+- **Dependencies:** Apple-native frameworks preferred. Third-party only when unavoidable and pre-approved.
 
-**Run a single test class:**
-```bash
-xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:OpenAurisTests/AppRepositoryTests test
-```
+---
 
-**VS Code tasks:**
-- `Build OpenAuris`: build Debug to `.build`
-- `Run OpenAuris`: depends on build, then `open .build/Build/Products/Debug/OpenAuris.app`
-- `Run Tests`: test target `OpenAurisTests` with `.build` derived data
+## Code Patterns
 
-`xcodebuild ... run` is not a valid build action in this setup.
+- Wire dependencies in `AppContainer` (composition root) — not inside views or services.
+- Expose behaviour through protocols (`TranscriptionEngine`, `TextInsertionService`, etc.), inject concrete types at the app layer.
+- Services are actors or `@MainActor` classes — never plain structs with mutable state.
+- SwiftData entities are only accessed via `AppRepository`. Never use `ModelContext` directly in views or services.
+- Use `InsertionResult` return values — don't swallow or ignore them.
 
-## Architecture
+---
 
-The app is a macOS menu bar app built with SwiftUI + SwiftData. Shared app state uses Swift Observation (`@Observable`) and is wired together in `AppContainer` (the app's composition root).
+## Testing Rules
 
-### Layers (`docs/ARCHITECTURE.md`)
+- Run tests with: `xcodebuild -project openauris.xcodeproj -scheme OpenAuris -destination 'platform=macOS' -configuration Debug -derivedDataPath .build -only-testing:OpenAurisTests test`
+- New logic = new unit tests. New UI behaviour = new UI tests if testable.
+- Tests must cover the happy path and at least one failure/edge case.
+- Do not delete or skip existing tests to make a build pass.
 
-| Layer | Key files |
-|---|---|
-| AppLayer | `AppContainer.swift`, `openaurisApp.swift` |
-| SessionLayer | `DictationSessionManager.swift` |
-| AudioLayer | `Services/Audio/AudioCaptureService.swift` |
-| EngineLayer | `Core/TranscriptionEngine.swift` (protocol), `Services/Engine/WhisperKitTranscriptionEngine.swift` |
-| InsertionLayer | `Services/Insertion/AccessibilityTextInsertionService.swift` |
-| ModelLayer | `Services/Models/WhisperModelManager.swift` |
-| DataLayer | `Data/AppRepository.swift` + SwiftData entities |
-| OverlayLayer | `Services/Overlay/OverlayPanelController.swift`, `UI/Overlay/ListeningBubbleView.swift` |
-| ShortcutsLayer | `Services/Shortcuts/GlobalHotkeyManager.swift` (Carbon APIs) |
-| IntentsLayer | `AppIntents/` |
+---
 
-### Main dictation flow
+## What Not To Do
 
-1. Global hotkey → `GlobalHotkeyManager` fires action → `DictationSessionManager.handleHotkeyAction(_:)`
-2. `DictationSessionManager` drives state: `.idle` → `.listening(mode)` → `.processing` → `.inserting` → `.idle`
-3. Audio frames from `AudioCaptureService.onFrame` are forwarded to `TranscriptionEngine.appendAudioFrame(_:)`
-4. Partial text is polled every 150 ms and inserted incrementally via `AccessibilityTextInsertionService`
-5. On stop, `finishStreaming()` returns `FinalTranscript`; text is finalised, session saved, stats/achievements recomputed
+- Don't add comments, docstrings, or type annotations to code you didn't change.
+- Don't add error handling for scenarios that can't happen.
+- Don't create helpers or abstractions for one-time use.
+- Don't add backwards-compatibility shims or feature flags unless asked.
+- Don't use `force try` (`try!`) or force unwraps (`!`) in production code.
 
-### Key protocols and contracts
+---
 
-- `TranscriptionEngine` — `prepare` → `startStreaming` → (`appendAudioFrame` loop) → `finishStreaming` / `cancelStreaming`
-- `TextInsertionService` — `insert(_:)` returns `InsertionResult` (.insertedDirectly / .insertedViaPasteFallback / .failed)
+## Response Format
 
-### Persistence
+At the end of every task response, include a concise summary that covers:
+- **Root cause** — what was wrong and why
+- **What changed** — files and lines modified, and what each change does
+- **Why it works** — the mechanism that makes the fix correct
+- **Local vs CI gap** — if applicable, why the issue only surfaced in one environment
 
-SwiftData entities via `AppRepository` (main context only, all calls `@MainActor`):
-`DictationSessionEntity`, `ModelInstallEntity`, `DailyStatsEntity`, `AchievementEntity`, `UserPreferenceEntity`
-
-
-## Development principles
-
-- Keep transcription local-only — no network calls for audio/text.
-- Prefer Apple-native frameworks; minimise third-party dependencies.
-- Preserve menu bar-first UX and low-latency dictation behaviour.
-- **A task is not complete until the project builds successfully and all tests pass.** Always run the build command after making changes before declaring work done.
+Keep it tight: bullet points, no padding, no repetition of what was already explained above.

@@ -15,6 +15,7 @@ struct SettingsDashboardView: View {
 
                 if let preferences = container.preferences {
                     generalCard(preferences: preferences)
+                    storageCard(preferences: preferences)
                     shortcutsCard(preferences: preferences)
                     permissionsCard
                     updatesCard
@@ -72,6 +73,72 @@ struct SettingsDashboardView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func storageCard(preferences: UserPreferenceEntity) -> some View {
+        DashboardCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Models Storage")
+                    .font(.headline)
+
+                Text("Where WhisperKit model files are downloaded.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Text(preferences.modelDownloadPath ?? defaultModelStoragePath)
+                        .font(.body.monospaced())
+                        .foregroundStyle(preferences.modelDownloadPath == nil ? .secondary : .primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    Button("Change Folder") {
+                        chooseModelStorageFolder()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Reset") {
+                        container.setModelDownloadPath(nil)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(preferences.modelDownloadPath == nil)
+                }
+            }
+        }
+    }
+
+    private var defaultModelStoragePath: String {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appending(path: "OpenAuris/Models").path(percentEncoded: false) + " (default)"
+    }
+
+    private func chooseModelStorageFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Folder"
+        panel.message = "Choose where OpenAuris should store downloaded model files."
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // Validate the directory is writable
+        var isDir: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+        if exists && !isDir.boolValue {
+            return
+        }
+        if !FileManager.default.isWritableFile(atPath: url.path) {
+            container.startupErrorMessage = "The selected folder is not writable. Please choose a different location."
+            return
+        }
+
+        container.setModelDownloadPath(url.path(percentEncoded: false))
     }
 
     private func shortcutsCard(preferences: UserPreferenceEntity) -> some View {

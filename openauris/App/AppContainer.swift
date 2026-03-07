@@ -49,9 +49,14 @@ final class AppContainer {
 
     private var didBootstrap = false
     private let isUITesting = ProcessInfo.processInfo.arguments.contains("-openauris-ui-testing")
+    private let isUnitTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     private var cancellables = Set<AnyCancellable>()
 
     init() {
+        if isUITesting {
+            NSApplication.shared.setActivationPolicy(.regular)
+        }
+
         modelContainer = PersistenceController.makeModelContainer()
         let context = modelContainer.mainContext
         repository = AppRepository(context: context)
@@ -91,6 +96,16 @@ final class AppContainer {
         // Set up model error callback after sessionManager is fully initialized
         sessionManager.setModelErrorHandler { [weak self] error in
             self?.runtimeStatus = .error(error)
+        }
+        sessionManager.setModelPreparationStateHandler { [weak self] state in
+            switch state {
+            case .preparing:
+                self?.runtimeStatus = .preparing
+            case .ready:
+                self?.runtimeStatus = .ready
+            case .error(let message):
+                self?.runtimeStatus = .error(message)
+            }
         }
 
         hotkeyManager.onAction = { [weak sessionManager] action in
@@ -134,12 +149,13 @@ final class AppContainer {
 
             permissionManager.refresh()
 
-            // Set preparing status while model is loading
-            runtimeStatus = .preparing
-            
-            await modelManager.installDefaultModelIfNeeded()
-            // If model installation succeeds, set ready status
-            runtimeStatus = .ready
+            modelManager.downloadBasePath = prefs.modelDownloadPath
+
+            if !(isUITesting || isUnitTesting) {
+                try await sessionManager.preloadActiveModelForImmediateUse()
+            } else {
+                runtimeStatus = .ready
+            }
 
             try repository.syncMilestonesCatalog()
 
@@ -176,9 +192,11 @@ final class AppContainer {
     func requestModelInstall(_ model: WhisperModelDescriptor) {
         Task {
             do {
-                runtimeStatus = .preparing
-                try await modelManager.install(model: model)
-                runtimeStatus = .ready
+                if model.id == modelManager.defaultModelID {
+                    try await sessionManager.preloadActiveModelForImmediateUse()
+                } else {
+                    try await modelManager.install(model: model)
+                }
                 refreshDashboardData()
             } catch {
                 runtimeStatus = .error(error.localizedDescription)
@@ -194,13 +212,8 @@ final class AppContainer {
         preferences.defaultModelID = modelID
 
         do {
-            runtimeStatus = .preparing
             try repository.savePreferences(preferences)
-            // If the new default model is not installed, install it
-            if !modelManager.isModelInstalled(modelID) {
-                await modelManager.installDefaultModelIfNeeded()
-            }
-            runtimeStatus = .ready
+            try await sessionManager.preloadActiveModelForImmediateUse()
             refreshDashboardData()
         } catch {
             runtimeStatus = .error(error.localizedDescription)
@@ -218,6 +231,31 @@ final class AppContainer {
             try repository.savePreferences(preferences)
         } catch {
             startupErrorMessage = error.localizedDescription
+        }
+    }
+
+    func setModelDownloadPath(_ path: String?) {
+        guard let preferences else { return }
+
+        preferences.modelDownloadPath = path
+        modelManager.downloadBasePath = path
+        modelManager.reloadFromStore()
+
+        do {
+            try repository.savePreferences(preferences)
+        } catch {
+            startupErrorMessage = error.localizedDescription
+            return
+        }
+
+        Task { [weak self] in
+            do {
+                try await self?.sessionManager.preloadActiveModelForImmediateUse()
+                self?.refreshDashboardData()
+            } catch {
+                self?.runtimeStatus = .error(error.localizedDescription)
+                self?.startupErrorMessage = error.localizedDescription
+            }
         }
     }
 

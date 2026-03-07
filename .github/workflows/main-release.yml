@@ -109,8 +109,10 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           ZIP="OpenAuris-${{ steps.version.outputs.FULL_VERSION }}.zip"
-          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" \
-            | /tmp/sparkle-tools/bin/sign_update "$ZIP" --ed-key-file -)
+          KEY_FILE=$(mktemp)
+          echo "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          SIGNATURE=$(/tmp/sparkle-tools/bin/sign_update "$ZIP" -f "$KEY_FILE")
+          rm -f "$KEY_FILE"
           echo "SPARKLE_SIGNATURE=$SIGNATURE" >> "$GITHUB_OUTPUT"
           echo "Sparkle signature: $SIGNATURE"
 

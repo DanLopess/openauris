@@ -102,11 +102,7 @@ struct DashboardRootView: View {
                         .foregroundStyle(.secondary)
                     Text(container.modelManager.defaultModelID.capitalized)
                         .font(.system(.body, design: .rounded).weight(.semibold))
-                    Text(
-                        container.modelManager.isModelInstalled(container.modelManager.defaultModelID)
-                        ? "Installed and ready."
-                        : "Waiting for install."
-                    )
+                    Text(activeModelSummary)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 }
@@ -185,6 +181,19 @@ private struct _TitlebarSeparatorHider: NSViewRepresentable {
 }
 
 extension DashboardRootView {
+    private var activeModelSummary: String {
+        let isInstalled = container.modelManager.isModelInstalled(container.modelManager.defaultModelID)
+
+        switch container.runtimeStatus {
+        case .ready:
+            return "Installed and loaded for immediate dictation."
+        case .preparing:
+            return isInstalled ? "Installed. Loading into memory..." : "Downloading and preparing for first use."
+        case .error:
+            return isInstalled ? "Installed, but not ready yet." : "Waiting for install."
+        }
+    }
+
     private var runtimeStatus: (label: String, color: Color) {
         switch container.runtimeStatus {
         case .preparing:

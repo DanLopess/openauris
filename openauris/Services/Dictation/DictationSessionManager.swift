@@ -1,6 +1,37 @@
 import Foundation
 import Observation
 
+@MainActor
+protocol AudioCaptureControlling: AnyObject {
+    var onFrame: (@Sendable (AudioFrame) -> Void)? { get set }
+    var onLevel: (@Sendable (Float) -> Void)? { get set }
+    func start() throws
+    func stop()
+}
+
+@MainActor
+protocol ModelManaging: AnyObject {
+    var defaultModelID: String { get }
+    var downloadBasePath: String? { get }
+    func ensureModelInstalled(_ modelID: String) async throws -> String
+    func reinstall(modelID: String) async throws
+}
+
+@MainActor
+protocol PermissionManaging: AnyObject {
+    func ensureMicrophoneAccess() async -> Bool
+}
+
+@MainActor
+protocol OverlayPresenting: AnyObject {
+    func updateAndShow()
+}
+
+extension AudioCaptureService: AudioCaptureControlling {}
+extension WhisperModelManager: ModelManaging {}
+extension PermissionManager: PermissionManaging {}
+extension OverlayPanelController: OverlayPresenting {}
+
 struct BubbleReadinessGate {
     private var awaitingFirstFrame = false
 
@@ -29,6 +60,32 @@ enum DictationSessionState: Equatable {
 }
 
 @MainActor
+enum ModelPreparationState: Equatable {
+    case preparing
+    case ready
+    case error(String)
+}
+
+private struct ModelPreparationRequest: Equatable {
+    let modelID: String
+    let languageOverride: String?
+    let downloadBasePath: String?
+}
+
+private struct PreparedModelContext: Equatable {
+    let modelID: String
+    let modelFolderPath: String
+    let languageOverride: String?
+    let downloadBasePath: String?
+
+    func matches(_ request: ModelPreparationRequest) -> Bool {
+        modelID == request.modelID &&
+        languageOverride == request.languageOverride &&
+        downloadBasePath == request.downloadBasePath
+    }
+}
+
+@MainActor
 @Observable
 final class DictationSessionManager {
     private(set) var state: DictationSessionState = .idle
@@ -36,19 +93,23 @@ final class DictationSessionManager {
     private(set) var lastTranscript: String = ""
     private(set) var errorMessage: String?
 
-    private let audioCaptureService: AudioCaptureService
+    private let audioCaptureService: any AudioCaptureControlling
     private let transcriptionEngine: any TranscriptionEngine
     private let insertionService: any TextInsertionService
     private let repository: AppRepository
-    private let modelManager: WhisperModelManager
-    private let permissionManager: PermissionManager
+    private let modelManager: any ModelManaging
+    private let permissionManager: any PermissionManaging
     private let bubbleViewModel: BubbleViewModel
-    private let overlayController: OverlayPanelController
+    private let overlayController: any OverlayPresenting
     private var onModelError: (String) -> Void = { _ in }
+    private var onModelPreparationStateChange: (ModelPreparationState) -> Void = { _ in }
 
     private var insertionStrategy: InsertionStrategy
     private var beginTask: Task<Void, Never>?
     private var bubbleReadinessGate = BubbleReadinessGate()
+    private var preparedContext: PreparedModelContext?
+    private var preloadRequest: ModelPreparationRequest?
+    private var preloadTask: Task<PreparedModelContext, Error>?
     private var streamingActive = false
     private var holdShortcutIsPressed = false
     private var lastToggleActionAt: Date?
@@ -57,14 +118,14 @@ final class DictationSessionManager {
     private var isCurrentAppTerminal: Bool = false
 
     init(
-        audioCaptureService: AudioCaptureService,
+        audioCaptureService: any AudioCaptureControlling,
         transcriptionEngine: any TranscriptionEngine,
         insertionService: any TextInsertionService,
         repository: AppRepository,
-        modelManager: WhisperModelManager,
-        permissionManager: PermissionManager,
+        modelManager: any ModelManaging,
+        permissionManager: any PermissionManaging,
         bubbleViewModel: BubbleViewModel,
-        overlayController: OverlayPanelController,
+        overlayController: any OverlayPresenting,
         insertionStrategy: InsertionStrategy,
         onModelError: @escaping (String) -> Void = { _ in }
     ) {
@@ -86,9 +147,59 @@ final class DictationSessionManager {
         onModelError = handler
     }
 
+    func setModelPreparationStateHandler(_ handler: @escaping (ModelPreparationState) -> Void) {
+        onModelPreparationStateChange = handler
+    }
+
     func setInsertionStrategy(_ strategy: InsertionStrategy) {
         guard state == .idle else { return }
         insertionStrategy = strategy
+    }
+
+    func preloadActiveModelForImmediateUse() async throws {
+        guard canPrepareModel else {
+            throw NSError(
+                domain: "OpenAuris.DictationSessionManager",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Finish the current dictation before changing the active model."]
+            )
+        }
+
+        let request = try currentModelPreparationRequest()
+        if let preparedContext, preparedContext.matches(request) {
+            onModelPreparationStateChange(.ready)
+            return
+        }
+
+        if let preloadTask, preloadRequest == request {
+            _ = try await preloadTask.value
+            return
+        }
+
+        onModelPreparationStateChange(.preparing)
+        let task = Task { try await self.prepareContext(for: request) }
+        preloadTask = task
+        preloadRequest = request
+
+        do {
+            let prepared = try await task.value
+            if preloadRequest == request {
+                preparedContext = prepared
+                preloadTask = nil
+                preloadRequest = nil
+            }
+            onModelPreparationStateChange(.ready)
+        } catch {
+            if preloadRequest == request {
+                preparedContext = nil
+                preloadTask = nil
+                preloadRequest = nil
+            }
+            let message = error.localizedDescription
+            onModelPreparationStateChange(.error(message))
+            onModelError(message)
+            throw error
+        }
     }
 
     func handleHotkeyAction(_ action: GlobalHotkeyManager.Action) {
@@ -177,54 +288,25 @@ final class DictationSessionManager {
             }
 
             try Task.checkCancellation()
+            guard try isActiveModelReadyForImmediateStart() else {
+                requestBackgroundPreload()
+                presentPreparingFeedback()
+                return
+            }
+
             partialText = ""
             errorMessage = nil
             startedAt = Date()
             currentTargetBundleID = insertionService.focusedApplicationBundleID()
             isCurrentAppTerminal = isTerminalApp(currentTargetBundleID)
 
-            state = .listening(mode)
-            bubbleViewModel.state = .preparing
-            bubbleViewModel.level = 0
-            overlayController.updateAndShow()
-
-            let modelID = modelManager.defaultModelID
             let languageOverride = try repository.ensurePreferences().languageOverride
             let shouldInsertRealtimePartials = RealtimeInsertionPolicy.shouldInsertPartials(
                 languageOverride: languageOverride
             )
-            let modelFolderPath = try await modelManager.ensureModelInstalled(modelID)
-            try Task.checkCancellation()
-            guard mode != .holdToSpeak || holdShortcutIsPressed else {
-                throw CancellationError()
-            }
 
-            do {
-                try await transcriptionEngine.prepare(
-                    modelID: modelID,
-                    modelFolderPath: modelFolderPath,
-                    languageOverride: languageOverride
-                )
-            } catch {
-                // Recover from partially written/corrupted local model artifacts.
-                try await modelManager.reinstall(modelID: modelID)
-                let repairedModelFolderPath = try await modelManager.ensureModelInstalled(modelID)
-                do {
-                    try await transcriptionEngine.prepare(
-                        modelID: modelID,
-                        modelFolderPath: repairedModelFolderPath,
-                        languageOverride: languageOverride
-                    )
-                } catch {
-                    // If recovery fails, this is a genuine model error
-                    onModelError(error.localizedDescription)
-                    throw error
-                }
-            }
-            try Task.checkCancellation()
-            guard mode != .holdToSpeak || holdShortcutIsPressed else {
-                throw CancellationError()
-            }
+            state = .listening(mode)
+            bubbleViewModel.level = 0
 
             try await transcriptionEngine.startStreaming()
             try Task.checkCancellation()
@@ -336,6 +418,77 @@ final class DictationSessionManager {
             overlayController.updateAndShow()
             dismissBubbleAfterDelay()
         }
+    }
+
+    private var canPrepareModel: Bool {
+        switch state {
+        case .idle, .error:
+            return true
+        case .listening, .processing, .inserting:
+            return false
+        }
+    }
+
+    private func currentModelPreparationRequest() throws -> ModelPreparationRequest {
+        let preferences = try repository.ensurePreferences()
+        return ModelPreparationRequest(
+            modelID: modelManager.defaultModelID,
+            languageOverride: WhisperKitConfiguration.normalizedLanguageOverride(preferences.languageOverride),
+            downloadBasePath: modelManager.downloadBasePath
+        )
+    }
+
+    private func isActiveModelReadyForImmediateStart() throws -> Bool {
+        guard let preparedContext else { return false }
+        return preparedContext.matches(try currentModelPreparationRequest())
+    }
+
+    private func prepareContext(for request: ModelPreparationRequest) async throws -> PreparedModelContext {
+        let initialFolderPath = try await modelManager.ensureModelInstalled(request.modelID)
+
+        do {
+            try await transcriptionEngine.prepare(
+                modelID: request.modelID,
+                modelFolderPath: initialFolderPath,
+                languageOverride: request.languageOverride
+            )
+
+            return PreparedModelContext(
+                modelID: request.modelID,
+                modelFolderPath: initialFolderPath,
+                languageOverride: request.languageOverride,
+                downloadBasePath: request.downloadBasePath
+            )
+        } catch {
+            try await modelManager.reinstall(modelID: request.modelID)
+            let repairedFolderPath = try await modelManager.ensureModelInstalled(request.modelID)
+            try await transcriptionEngine.prepare(
+                modelID: request.modelID,
+                modelFolderPath: repairedFolderPath,
+                languageOverride: request.languageOverride
+            )
+
+            return PreparedModelContext(
+                modelID: request.modelID,
+                modelFolderPath: repairedFolderPath,
+                languageOverride: request.languageOverride,
+                downloadBasePath: request.downloadBasePath
+            )
+        }
+    }
+
+    private func requestBackgroundPreload() {
+        Task { [weak self] in
+            try? await self?.preloadActiveModelForImmediateUse()
+        }
+    }
+
+    private func presentPreparingFeedback() {
+        transitionToIdle()
+        bubbleViewModel.state = .error("Model is still preparing. Try again in a moment.")
+        bubbleViewModel.level = 0
+        overlayController.updateAndShow()
+        dismissBubbleAfterDelay()
     }
 
     private func wireAudioCallbacks() {
